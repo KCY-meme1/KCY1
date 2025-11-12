@@ -19,18 +19,29 @@ contract KCY1Token {
     uint256 public constant OWNER_FEE = 500; // 5% за собственик
     uint256 public constant FEE_DENOMINATOR = 10000;
     
-    // Лимити за транзакции
-    uint256 public constant MAX_TRANSACTION = 1000 * 10**18; // 1000 токена
+    // Лимити
+    uint256 public constant MAX_TRANSACTION = 1000 * 10**18; // 1000 токена на транзакция
+    uint256 public constant MAX_WALLET = 20000 * 10**18;     // 20 000 токена в портфейл
     uint256 public constant COOLDOWN_PERIOD = 2 hours;
     
     // Пауза
     uint256 public pausedUntil;
     bool public isPaused;
     
+    // ХАРДКОДНАТИ адреси без лимити (задай при deploy)
+    // ВАЖНО: Попълни реалните адреси преди deploy!
+    address public constant EXEMPT_ADDRESS_1 = 0x0000000000000000000000000000000000000001; // Замени с реален адрес
+    address public constant EXEMPT_ADDRESS_2 = 0x0000000000000000000000000000000000000002; // Замени с реален адрес  
+    address public constant EXEMPT_ADDRESS_3 = 0x0000000000000000000000000000000000000003; // Замени с реален адрес
+    // Добави още ако трябва (EXEMPT_ADDRESS_4, 5, и т.н.)
+    
+    // PancakeSwap Router на BSC Mainnet (хардкоднат, БЕЗ такси)
+    address public constant PANCAKESWAP_ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+    // PancakeSwap Factory (създава liquidity pools)
+    address public constant PANCAKESWAP_FACTORY = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
+    
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
-    mapping(address => bool) public isExcludedFromFees;
-    mapping(address => bool) public isExcludedFromLimits;
     mapping(address => uint256) public lastTransactionTime;
     mapping(address => bool) public isBlacklisted;
     
@@ -49,7 +60,7 @@ contract KCY1Token {
         if (isPaused) {
             require(block.timestamp >= pausedUntil, "Contract is paused");
             if (block.timestamp >= pausedUntil) {
-                isPaused = false; // Автоматично отпаузва след 48ч
+                isPaused = false;
             }
         }
         _;
@@ -64,14 +75,23 @@ contract KCY1Token {
         balanceOf[owner] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
         
-        // Owner и contract без такси и лимити
-        isExcludedFromFees[owner] = true;
-        isExcludedFromFees[address(this)] = true;
-        isExcludedFromLimits[owner] = true;
-        isExcludedFromLimits[address(this)] = true;
-        
         emit Transfer(address(0), owner, 600_000 * 10**decimals);
         emit Transfer(address(0), address(this), 400_000 * 10**decimals);
+    }
+    
+    /**
+     * @dev Проверка дали адресът е изключен от лимити и такси
+     * ХАРДКОДНАТО - не може да се променя след deploy
+     */
+    function isExemptAddress(address account) public view returns (bool) {
+        return account == owner 
+            || account == address(this)
+            || account == PANCAKESWAP_ROUTER
+            || account == PANCAKESWAP_FACTORY
+            || account == EXEMPT_ADDRESS_1
+            || account == EXEMPT_ADDRESS_2
+            || account == EXEMPT_ADDRESS_3;
+            // Добави още || account == EXEMPT_ADDRESS_4 ако имаш повече
     }
     
     /**
@@ -133,16 +153,26 @@ contract KCY1Token {
         require(!isBlacklisted[from], "Sender is blacklisted");
         require(!isBlacklisted[to], "Recipient is blacklisted");
         
-        // Проверка за trading lock (освен owner)
-        if (from != owner && to != owner) {
+        bool fromExempt = isExemptAddress(from);
+        bool toExempt = isExemptAddress(to);
+        
+        // Проверка за trading lock (освен exempt адреси)
+        if (!fromExempt && !toExempt) {
             require(block.timestamp >= tradingEnabledTime, "Trading locked for 48h");
         }
         
-        // ЛИМИТИ - Max transaction + Cooldown
-        if (!isExcludedFromLimits[from] && !isExcludedFromLimits[to]) {
-            require(amount <= MAX_TRANSACTION, "Exceeds max transaction limit (1000 tokens)");
+        // ЛИМИТИ - само за не-exempt адреси
+        if (!fromExempt && !toExempt) {
+            // Max transaction limit
+            require(amount <= MAX_TRANSACTION, "Exceeds max transaction (1000 tokens)");
             
-            // Cooldown проверка (2 часа между транзакции)
+            // Max wallet limit - проверка на получателя
+            require(
+                balanceOf[to] + amount <= MAX_WALLET,
+                "Recipient would exceed max wallet (20,000 tokens)"
+            );
+            
+            // Cooldown между транзакции
             if (lastTransactionTime[from] != 0) {
                 require(
                     block.timestamp >= lastTransactionTime[from] + COOLDOWN_PERIOD,
@@ -153,25 +183,22 @@ contract KCY1Token {
             lastTransactionTime[from] = block.timestamp;
         }
         
-        // Ако sender или receiver е без такси
-        if (isExcludedFromFees[from] || isExcludedFromFees[to]) {
+        // Exempt адреси = БЕЗ такси
+        if (fromExempt || toExempt) {
             balanceOf[from] -= amount;
             balanceOf[to] += amount;
             emit Transfer(from, to, amount);
             return true;
         }
         
-        // Изчисляване на такси
+        // Обикновени адреси = С такси
         uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
         uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
         uint256 transferAmount = amount - burnAmount - ownerAmount;
         
-        // Извършване на трансфера
         balanceOf[from] -= amount;
         balanceOf[to] += transferAmount;
         balanceOf[owner] += ownerAmount;
-        
-        // Изгаряне на токени
         totalSupply -= burnAmount;
         
         emit Transfer(from, to, transferAmount);
@@ -213,20 +240,6 @@ contract KCY1Token {
     }
     
     /**
-     * @dev Добавяне/премахване от fee whitelist
-     */
-    function setFeeExclusion(address account, bool excluded) external onlyOwner {
-        isExcludedFromFees[account] = excluded;
-    }
-    
-    /**
-     * @dev Добавяне/премахване от limits whitelist
-     */
-    function setLimitExclusion(address account, bool excluded) external onlyOwner {
-        isExcludedFromLimits[account] = excluded;
-    }
-    
-    /**
      * @dev Проверка дали търговията е активна
      */
     function isTradingEnabled() public view returns (bool) {
@@ -251,25 +264,50 @@ contract KCY1Token {
     }
     
     /**
-     * @dev Аварийно изтегляне на случайно изпратени токени
+     * @dev RESCUE ФУНКЦИЯ - Изтегляне на ЧУЖДИ токени, изпратени по грешка
+     * 
+     * Пример: Някой изпрати 1000 USDT на този contract адрес по грешка.
+     * Без тази функция - USDT-тата са загубени завинаги!
+     * С тази функция - собственикът може да ги върне.
+     * 
+     * ВАЖНО: НЕ МОЖЕ да изтегли KCY1 токени (само чужди токени)
      */
-    function rescueTokens(address token, uint256 amount) external onlyOwner {
-        require(token != address(this), "Cannot rescue own token");
-        (bool success, bytes memory data) = token.call(
+    function rescueTokens(address tokenAddress, uint256 amount) external onlyOwner {
+        require(tokenAddress != address(this), "Cannot rescue own KCY1 tokens");
+        
+        // Извикване на transfer() функцията на чуждия токен
+        (bool success, bytes memory data) = tokenAddress.call(
             abi.encodeWithSignature("transfer(address,uint256)", owner, amount)
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "Rescue failed");
     }
     
     /**
-     * @dev Receive function - contract може да получава BNB
+     * @dev Receive function - позволява на contract-а да получава BNB
+     * 
+     * ЗАЩО Е НУЖНО:
+     * Когато добавиш ликвидност на PancakeSwap, трябва да изпратиш:
+     * - KCY1 токени
+     * - BNB
+     * 
+     * Liquidity pool-ът (умният contract) може да изпрати обратно малко BNB
+     * като "рестo" ако изчисленията не са точни.
+     * Без receive() - транзакцията ще фейлне!
      */
     receive() external payable {}
     
     /**
      * @dev Изтегляне на BNB от contract
+     * 
+     * ЗАЩО Е НУЖНО:
+     * 1. Някой може да изпрати BNB директно на contract адреса (по грешка)
+     * 2. PancakeSwap pool може да върне малко BNB като "ресто"
+     * 
+     * Без тази функция - BNB-тата остават блокирани завинаги!
      */
     function withdrawBNB() external onlyOwner {
-        payable(owner).transfer(address(this).balance);
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No BNB to withdraw");
+        payable(owner).transfer(balance);
     }
 }
