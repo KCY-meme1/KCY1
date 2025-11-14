@@ -37,9 +37,9 @@ abstract contract ReentrancyGuard {
 }
 
 /**
- * @title KCY1 Token - Защитен deflationary токен
- * @dev ERC20 с автоматично изгаряне, лимити и защити
- * @author FIXED VERSION - Всички критични проблеми са коригирани
+ * @title KCY1 Token - Secure deflationary token
+ * @dev ERC20 with automatic burn, limits and protections
+ * @author FIXED VERSION - All critical issues have been corrected
  */
 contract KCY1Token is IERC20, ReentrancyGuard {
     string public constant name = "KCY1";
@@ -50,32 +50,32 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     address public immutable owner;
     uint256 public immutable tradingEnabledTime;
     
-    // Такси в базисни точки (1 bp = 0.01%)
-    uint256 public constant BURN_FEE = 300;  // 3% изгаряне
-    uint256 public constant OWNER_FEE = 500; // 5% за собственик
+    // Fees in basis points (1 bp = 0.01%)
+    uint256 public constant BURN_FEE = 300;  // 3% burn
+    uint256 public constant OWNER_FEE = 500; // 5% to owner
     uint256 public constant FEE_DENOMINATOR = 10000;
     
-    // Лимити
-    uint256 public constant MAX_TRANSACTION = 1000 * 10**18; // 1000 токена на транзакция
-    uint256 public constant MAX_WALLET = 20000 * 10**18;     // 20,000 токена в портфейл
+    // Limits
+    uint256 public constant MAX_TRANSACTION = 1000 * 10**18; // 1000 tokens per transaction
+    uint256 public constant MAX_WALLET = 20000 * 10**18;     // 20,000 tokens per wallet
     uint256 public constant COOLDOWN_PERIOD = 2 hours;
     uint256 public constant PAUSE_DURATION = 48 hours;
     
-    // Пауза
+    // Pause
     uint256 public pausedUntil;
     
-    // ПРЕФЕРЕНЦИАЛНИ АДРЕСИ - Могат да се променят ДО LOCK
+    // PRIVILEGED ADDRESSES - Can be changed UNTIL LOCK
     address public exemptAddress1;
     address public exemptAddress2;
     address public exemptAddress3;
     address public exemptAddress4;
     address public exemptAddress5;
     
-    // PancakeSwap адреси (може да се променят ДО LOCK)
+    // PancakeSwap addresses (can be changed UNTIL LOCK)
     address public pancakeswapRouter;
     address public pancakeswapFactory;
     
-    // 🔒 LOCK механизъм - след активиране НЕ МОЖЕ да се променят exempt адресите
+    // 🔒 LOCK mechanism - after activation CANNOT change exempt addresses
     bool public exemptAddressesLocked;
     
     mapping(address => uint256) public override balanceOf;
@@ -111,16 +111,16 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         tradingEnabledTime = block.timestamp + 48 hours;
         totalSupply = 1_000_000 * 10**decimals;
         
-        // Разпределение
+        // Distribution
         balanceOf[owner] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
         
-        // Инициализация на PancakeSwap адреси (BSC Mainnet)
-        // Тези адреси могат да бъдат променени след deploy чрез setExemptAddresses
+        // Initialize PancakeSwap addresses (BSC Mainnet)
+        // These addresses can be changed after deploy via setExemptAddresses
         pancakeswapRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
         pancakeswapFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
         
-        // Exempt адресите са празни - ще ги зададеш след deploy
+        // Exempt addresses are empty - will be set after deploy
         exemptAddress1 = address(0);
         exemptAddress2 = address(0);
         exemptAddress3 = address(0);
@@ -132,16 +132,16 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev 🔓 ЗАДАВАНЕ НА EXEMPT АДРЕСИ - работи само ПРЕДИ lock
+     * @dev 🔓 SET EXEMPT ADDRESSES - works only BEFORE lock
      * 
-     * Параметри:
-     * _addresses[5] - масив с 5 адреса (ако нямаш толкова, сложи address(0))
-     * _router - PancakeSwap Router адрес
-     * _factory - PancakeSwap Factory адрес
+     * Parameters:
+     * _addresses[5] - array of 5 addresses (use address(0) if you don't have 5)
+     * _router - PancakeSwap Router address
+     * _factory - PancakeSwap Factory address
      * 
-     * Пример за извикване:
+     * Example call:
      * setExemptAddresses(
-     *   [0xАдрес1, 0xАдрес2, 0xАдрес3, address(0), address(0)],
+     *   [0xAddress1, 0xAddress2, 0xAddress3, address(0), address(0)],
      *   0x10ED43C718714eb63d5aA57B78B54704E256024E,  // Router
      *   0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73   // Factory
      * )
@@ -154,14 +154,14 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         require(_router != address(0), "Invalid router address");
         require(_factory != address(0), "Invalid factory address");
         
-        // Задаване на преференциалните адреси
+        // Set privileged addresses
         exemptAddress1 = _addresses[0];
         exemptAddress2 = _addresses[1];
         exemptAddress3 = _addresses[2];
         exemptAddress4 = _addresses[3];
         exemptAddress5 = _addresses[4];
         
-        // Задаване на DEX адреси
+        // Set DEX addresses
         pancakeswapRouter = _router;
         pancakeswapFactory = _factory;
         
@@ -169,14 +169,14 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev 🔒 LOCK НА EXEMPT АДРЕСИТЕ - НЕОБРАТИМО!
+     * @dev 🔒 LOCK EXEMPT ADDRESSES - IRREVERSIBLE!
      * 
-     * ВНИМАНИЕ: След извикване на тази функция:
-     * - НЕ МОЖЕ да променяш exempt адресите НИКОГА ПОВЕЧЕ
-     * - НЕ МОЖЕ да променяш PancakeSwap адресите
-     * - Това е ПЕРМАНЕНТНО и НЕОБРАТИМО
+     * WARNING: After calling this function:
+     * - CANNOT change exempt addresses EVER AGAIN
+     * - CANNOT change PancakeSwap addresses
+     * - This is PERMANENT and IRREVERSIBLE
      * 
-     * Извикай само когато си 100% сигурен в адресите!
+     * Only call when you are 100% sure about the addresses!
      */
     function lockExemptAddresses() external onlyOwner whenNotLocked {
         require(pancakeswapRouter != address(0), "Router not set");
@@ -187,7 +187,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Проверка дали адресът е exempt (БЕЗ такси и лимити)
+     * @dev Check if address is exempt (NO fees and limits)
      */
     function isExemptAddress(address account) public view returns (bool) {
         return account == owner 
@@ -202,14 +202,14 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Проверка дали контрактът е в пауза
+     * @dev Check if contract is paused
      */
     function isPaused() public view returns (bool) {
         return block.timestamp < pausedUntil;
     }
     
     /**
-     * @dev ПАУЗА - Блокира всички трансфери за 48 часа
+     * @dev PAUSE - Block all transfers for 48 hours
      */
     function pause() external onlyOwner {
         require(pausedUntil <= block.timestamp, "Already paused");
@@ -218,7 +218,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Добавяне/премахване от blacklist
+     * @dev Add/remove from blacklist
      */
     function setBlacklist(address account, bool status) external onlyOwner {
         require(account != owner, "Cannot blacklist owner");
@@ -230,7 +230,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Масово blacklist-ване (за бот атаки)
+     * @dev Batch blacklisting (for bot attacks)
      */
     function setBlacklistBatch(address[] calldata accounts, bool status) external onlyOwner {
         for (uint256 i = 0; i < accounts.length; i++) {
@@ -244,20 +244,20 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Стандартен ERC20 transfer
+     * @dev Standard ERC20 transfer
      */
     function transfer(address to, uint256 amount) public override whenNotPaused returns (bool) {
         return _transfer(msg.sender, to, amount);
     }
     
     /**
-     * @dev Стандартен ERC20 transferFrom
+     * @dev Standard ERC20 transferFrom
      */
     function transferFrom(address from, address to, uint256 amount) public override whenNotPaused returns (bool) {
         uint256 currentAllowance = allowance[from][msg.sender];
         require(currentAllowance >= amount, "Insufficient allowance");
         
-        // Намаляване на allowance
+        // Decrease allowance
         unchecked {
             allowance[from][msg.sender] = currentAllowance - amount;
         }
@@ -266,7 +266,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Вътрешна логика за трансфер с всички проверки
+     * @dev Internal transfer logic with all checks
      */
     function _transfer(address from, address to, uint256 amount) internal returns (bool) {
         require(from != address(0), "Transfer from zero address");
@@ -275,28 +275,28 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         require(!isBlacklisted[from], "Sender is blacklisted");
         require(!isBlacklisted[to], "Recipient is blacklisted");
         
-        // Кеширане на exempt статус за gas оптимизация
+        // Cache exempt status for gas optimization
         bool fromExempt = isExemptAddress(from);
         bool toExempt = isExemptAddress(to);
         
-        // Проверка за trading lock (освен exempt адреси)
+        // Check for trading lock (except exempt addresses)
         if (!fromExempt && !toExempt) {
             require(block.timestamp >= tradingEnabledTime, "Trading locked for 48h");
         }
         
-        // ЛИМИТИ - само за не-exempt адреси
+        // LIMITS - only for non-exempt addresses
         if (!fromExempt && !toExempt) {
-            // Проверка на max transaction
+            // Check max transaction
             require(amount <= MAX_TRANSACTION, "Exceeds max transaction (1000 tokens)");
             
-            // Проверка на max wallet
+            // Check max wallet
             uint256 recipientBalance = balanceOf[to];
             require(
                 recipientBalance + amount <= MAX_WALLET,
                 "Recipient would exceed max wallet (20,000 tokens)"
             );
             
-            // Cooldown проверка
+            // Cooldown check
             uint256 lastTx = lastTransactionTime[from];
             if (lastTx != 0) {
                 require(
@@ -306,9 +306,9 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             }
         }
         
-        // Изпълнение на трансфера
+        // Execute transfer
         
-        // Exempt адреси = БЕЗ такси
+        // Exempt addresses = NO fees
         if (fromExempt || toExempt) {
             unchecked {
                 balanceOf[from] -= amount;
@@ -316,7 +316,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             }
             emit Transfer(from, to, amount);
         } else {
-            // Обикновени адреси = С такси
+            // Regular addresses = WITH fees
             uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
             uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
             uint256 transferAmount = amount - burnAmount - ownerAmount;
@@ -333,7 +333,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             emit Transfer(from, address(0), burnAmount);
             emit TokensBurned(burnAmount);
             
-            // ВАЖНО: Обновяване на cooldown САМО след успешен трансфер
+            // IMPORTANT: Update cooldown ONLY after successful transfer
             lastTransactionTime[from] = block.timestamp;
         }
         
@@ -341,7 +341,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Стандартен ERC20 approve
+     * @dev Standard ERC20 approve
      */
     function approve(address spender, uint256 amount) public override returns (bool) {
         _approve(msg.sender, spender, amount);
@@ -349,7 +349,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Увеличаване на allowance (по-безопасно от approve)
+     * @dev Increase allowance (safer than approve)
      */
     function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
         _approve(msg.sender, spender, allowance[msg.sender][spender] + addedValue);
@@ -357,7 +357,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Намаляване на allowance (по-безопасно от approve)
+     * @dev Decrease allowance (safer than approve)
      */
     function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
         uint256 currentAllowance = allowance[msg.sender][spender];
@@ -369,7 +369,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Вътрешна функция за approve
+     * @dev Internal approve function
      */
     function _approve(address tokenOwner, address spender, uint256 amount) internal {
         require(tokenOwner != address(0), "Approve from zero address");
@@ -380,7 +380,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Изтегляне на циркулационни токени от контракта
+     * @dev Withdraw circulation tokens from contract
      */
     function withdrawCirculationTokens(uint256 amount) external onlyOwner {
         require(balanceOf[address(this)] >= amount, "Insufficient contract balance");
@@ -394,7 +394,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Ръчно изгаряне на токени
+     * @dev Manual token burn
      */
     function burn(uint256 amount) external onlyOwner {
         require(balanceOf[msg.sender] >= amount, "Insufficient balance");
@@ -409,14 +409,14 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Проверка дали търговията е активна
+     * @dev Check if trading is enabled
      */
     function isTradingEnabled() public view returns (bool) {
         return block.timestamp >= tradingEnabledTime;
     }
     
     /**
-     * @dev Време до активиране на търговията (в секунди)
+     * @dev Time until trading is enabled (in seconds)
      */
     function timeUntilTradingEnabled() public view returns (uint256) {
         if (isTradingEnabled()) return 0;
@@ -424,7 +424,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Време до края на паузата (в секунди)
+     * @dev Time until pause ends (in seconds)
      */
     function timeUntilUnpaused() public view returns (uint256) {
         if (!isPaused()) return 0;
@@ -432,7 +432,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Получаване на всички exempt адреси (за проверка преди lock)
+     * @dev Get all exempt addresses (for verification before lock)
      */
     function getExemptAddresses() external view returns (
         address[5] memory addresses,
@@ -451,13 +451,13 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev RESCUE - Изтегляне на грешно изпратени токени (с ReentrancyGuard защита)
+     * @dev RESCUE - Withdraw mistakenly sent tokens (with ReentrancyGuard protection)
      */
     function rescueTokens(address tokenAddress, uint256 amount) external onlyOwner nonReentrant {
         require(tokenAddress != address(0), "Invalid token address");
         require(tokenAddress != address(this), "Cannot rescue own KCY1 tokens");
         
-        // Използване на interface за по-безопасен transfer
+        // Use interface for safer transfer
         IERC20 token = IERC20(tokenAddress);
         require(token.transfer(owner, amount), "Rescue transfer failed");
         
@@ -465,12 +465,12 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
-     * @dev Приемане на BNB
+     * @dev Receive BNB
      */
     receive() external payable {}
     
     /**
-     * @dev Изтегляне на BNB от контракта
+     * @dev Withdraw BNB from contract
      */
     function withdrawBNB() external onlyOwner nonReentrant {
         uint256 balance = address(this).balance;
