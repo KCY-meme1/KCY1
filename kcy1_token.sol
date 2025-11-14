@@ -28,17 +28,19 @@ contract KCY1Token {
     uint256 public pausedUntil;
     bool public isPaused;
     
-    // ХАРДКОДНАТИ адреси без лимити (задай при deploy)
-    // ВАЖНО: Попълни реалните адреси преди deploy!
-    address public constant EXEMPT_ADDRESS_1 = 0x0000000000000000000000000000000000000001; // Замени с реален адрес
-    address public constant EXEMPT_ADDRESS_2 = 0x0000000000000000000000000000000000000002; // Замени с реален адрес  
-    address public constant EXEMPT_ADDRESS_3 = 0x0000000000000000000000000000000000000003; // Замени с реален адрес
-    // Добави още ако трябва (EXEMPT_ADDRESS_4, 5, и т.н.)
+    // ПРЕФЕРЕНЦИАЛНИ АДРЕСИ - Могат да се променят ДО LOCK
+    address public exemptAddress1;
+    address public exemptAddress2;
+    address public exemptAddress3;
+    address public exemptAddress4;
+    address public exemptAddress5;
     
-    // PancakeSwap Router на BSC Mainnet (хардкоднат, БЕЗ такси)
-    address public constant PANCAKESWAP_ROUTER = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
-    // PancakeSwap Factory (създава liquidity pools)
-    address public constant PANCAKESWAP_FACTORY = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
+    // PancakeSwap адреси (може да се променят ДО LOCK)
+    address public pancakeswapRouter;
+    address public pancakeswapFactory;
+    
+    // 🔒 LOCK механизъм - след активиране НЕ МОЖЕ да се променят exempt адресите
+    bool public exemptAddressesLocked;
     
     mapping(address => uint256) public balanceOf;
     mapping(address => mapping(address => uint256)) public allowance;
@@ -50,6 +52,8 @@ contract KCY1Token {
     event TokensBurned(uint256 amount);
     event Paused(uint256 until);
     event Blacklisted(address indexed account, bool status);
+    event ExemptAddressesUpdated(address[5] addresses, address router, address factory);
+    event ExemptAddressesLocked();
     
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -66,6 +70,11 @@ contract KCY1Token {
         _;
     }
     
+    modifier whenNotLocked() {
+        require(!exemptAddressesLocked, "Exempt addresses are locked forever");
+        _;
+    }
+    
     constructor() {
         owner = msg.sender;
         tradingEnabledTime = block.timestamp + 48 hours;
@@ -75,28 +84,87 @@ contract KCY1Token {
         balanceOf[owner] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
         
+        // Инициализация на PancakeSwap адреси (BSC Mainnet)
+        pancakeswapRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+        pancakeswapFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
+        
+        // Exempt адресите са празни - ще ги зададеш след deploy
+        exemptAddress1 = address(0);
+        exemptAddress2 = address(0);
+        exemptAddress3 = address(0);
+        exemptAddress4 = address(0);
+        exemptAddress5 = address(0);
+        
         emit Transfer(address(0), owner, 600_000 * 10**decimals);
         emit Transfer(address(0), address(this), 400_000 * 10**decimals);
     }
     
     /**
-     * @dev Проверка дали адресът е изключен от лимити и такси
-     * ХАРДКОДНАТО - не може да се променя след deploy
+     * @dev 🔓 ЗАДАВАНЕ НА EXEMPT АДРЕСИ - работи само ПРЕДИ lock
+     * 
+     * Параметри:
+     * _addresses[5] - масив с 5 адреса (ако нямаш толкова, сложи address(0))
+     * _router - PancakeSwap Router адрес
+     * _factory - PancakeSwap Factory адрес
+     * 
+     * Пример за извикване:
+     * setExemptAddresses(
+     *   [0xАдрес1, 0xАдрес2, 0xАдрес3, address(0), address(0)],
+     *   0x10ED43C718714eb63d5aA57B78B54704E256024E,  // Router
+     *   0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73   // Factory
+     * )
+     */
+    function setExemptAddresses(
+        address[5] calldata _addresses,
+        address _router,
+        address _factory
+    ) external onlyOwner whenNotLocked {
+        // Задаване на преференциалните адреси
+        exemptAddress1 = _addresses[0];
+        exemptAddress2 = _addresses[1];
+        exemptAddress3 = _addresses[2];
+        exemptAddress4 = _addresses[3];
+        exemptAddress5 = _addresses[4];
+        
+        // Задаване на DEX адреси
+        pancakeswapRouter = _router;
+        pancakeswapFactory = _factory;
+        
+        emit ExemptAddressesUpdated(_addresses, _router, _factory);
+    }
+    
+    /**
+     * @dev 🔒 LOCK НА EXEMPT АДРЕСИТЕ - НЕОБРАТИМО!
+     * 
+     * ВНИМАНИЕ: След извикване на тази функция:
+     * - НЕ МОЖЕ да променяш exempt адресите НИКОГА ПОВЕЧЕ
+     * - НЕ МОЖЕ да променяш PancakeSwap адресите
+     * - Това е ПЕРМАНЕНТНО и НЕОБРАТИМО
+     * 
+     * Извикай само когато си 100% сигурен в адресите!
+     */
+    function lockExemptAddresses() external onlyOwner whenNotLocked {
+        exemptAddressesLocked = true;
+        emit ExemptAddressesLocked();
+    }
+    
+    /**
+     * @dev Проверка дали адресът е exempt (БЕЗ такси и лимити)
      */
     function isExemptAddress(address account) public view returns (bool) {
         return account == owner 
             || account == address(this)
-            || account == PANCAKESWAP_ROUTER
-            || account == PANCAKESWAP_FACTORY
-            || account == EXEMPT_ADDRESS_1
-            || account == EXEMPT_ADDRESS_2
-            || account == EXEMPT_ADDRESS_3;
-            // Добави още || account == EXEMPT_ADDRESS_4 ако имаш повече
+            || account == pancakeswapRouter
+            || account == pancakeswapFactory
+            || account == exemptAddress1
+            || account == exemptAddress2
+            || account == exemptAddress3
+            || account == exemptAddress4
+            || account == exemptAddress5;
     }
     
     /**
      * @dev ПАУЗА - Блокира всички трансфери за 48 часа
-     * ВАЖНО: След активиране НЕ МОЖЕ да се отмени предсрочно!
      */
     function pause() external onlyOwner {
         require(!isPaused, "Already paused");
@@ -163,16 +231,13 @@ contract KCY1Token {
         
         // ЛИМИТИ - само за не-exempt адреси
         if (!fromExempt && !toExempt) {
-            // Max transaction limit
             require(amount <= MAX_TRANSACTION, "Exceeds max transaction (1000 tokens)");
             
-            // Max wallet limit - проверка на получателя
             require(
                 balanceOf[to] + amount <= MAX_WALLET,
                 "Recipient would exceed max wallet (20,000 tokens)"
             );
             
-            // Cooldown между транзакции
             if (lastTransactionTime[from] != 0) {
                 require(
                     block.timestamp >= lastTransactionTime[from] + COOLDOWN_PERIOD,
@@ -264,47 +329,37 @@ contract KCY1Token {
     }
     
     /**
-     * @dev RESCUE ФУНКЦИЯ - Изтегляне на ЧУЖДИ токени, изпратени по грешка
-     * 
-     * Пример: Някой изпрати 1000 USDT на този contract адрес по грешка.
-     * Без тази функция - USDT-тата са загубени завинаги!
-     * С тази функция - собственикът може да ги върне.
-     * 
-     * ВАЖНО: НЕ МОЖЕ да изтегли KCY1 токени (само чужди токени)
+     * @dev Получаване на всички exempt адреси (за проверка преди lock)
+     */
+    function getExemptAddresses() external view returns (
+        address[5] memory addresses,
+        address router,
+        address factory,
+        bool locked
+    ) {
+        addresses[0] = exemptAddress1;
+        addresses[1] = exemptAddress2;
+        addresses[2] = exemptAddress3;
+        addresses[3] = exemptAddress4;
+        addresses[4] = exemptAddress5;
+        router = pancakeswapRouter;
+        factory = pancakeswapFactory;
+        locked = exemptAddressesLocked;
+    }
+    
+    /**
+     * @dev RESCUE - Изтегляне на чужди токени
      */
     function rescueTokens(address tokenAddress, uint256 amount) external onlyOwner {
         require(tokenAddress != address(this), "Cannot rescue own KCY1 tokens");
-        
-        // Извикване на transfer() функцията на чуждия токен
         (bool success, bytes memory data) = tokenAddress.call(
             abi.encodeWithSignature("transfer(address,uint256)", owner, amount)
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), "Rescue failed");
     }
     
-    /**
-     * @dev Receive function - позволява на contract-а да получава BNB
-     * 
-     * ЗАЩО Е НУЖНО:
-     * Когато добавиш ликвидност на PancakeSwap, трябва да изпратиш:
-     * - KCY1 токени
-     * - BNB
-     * 
-     * Liquidity pool-ът (умният contract) може да изпрати обратно малко BNB
-     * като "рестo" ако изчисленията не са точни.
-     * Без receive() - транзакцията ще фейлне!
-     */
     receive() external payable {}
     
-    /**
-     * @dev Изтегляне на BNB от contract
-     * 
-     * ЗАЩО Е НУЖНО:
-     * 1. Някой може да изпрати BNB директно на contract адреса (по грешка)
-     * 2. PancakeSwap pool може да върне малко BNB като "ресто"
-     * 
-     * Без тази функция - BNB-тата остават блокирани завинаги!
-     */
     function withdrawBNB() external onlyOwner {
         uint256 balance = address(this).balance;
         require(balance > 0, "No BNB to withdraw");
