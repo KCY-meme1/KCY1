@@ -2,12 +2,14 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY1 Token - VERSION 3.0 WITH AUTO-DISTRIBUTION
- * @dev Enhanced version with automatic initial distribution to preset addresses
- * @author Final Production Version with Distribution Feature
+ * @title KCY1 Token - VERSION 3.2 WITH EXEMPT PRIVILEGES
+ * @dev Enhanced version with:
+ *      - Automatic initial distribution
+ *      - Exempt-to-normal transfer restrictions (100 tokens, 24h cooldown)
+ *      - Pause and Blacklist do NOT apply to exempt addresses
+ * @author Production Version with Full Exempt Privileges
  */
 
-// [Previous interfaces remain the same - IERC20 and ReentrancyGuard]
 interface IERC20 {
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
@@ -53,28 +55,27 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     // ====================================
     // CHANGE THESE VALUES BEFORE DEPLOYMENT!
     
-    // Marketing wallet - will receive 50,000 tokens
-    address private constant MARKETING_WALLET = 0x1234567890123456789012345678901234567891; // CHANGE THIS!
-    uint256 private constant MARKETING_ALLOCATION = 50_000 * 10**18;
+    // Marketing wallet - will receive 150,000 tokens
+    address private constant MARKETING_WALLET = 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
+    uint256 private constant MARKETING_ALLOCATION = 150_000 * 10**18;
     
-    // Team wallet - will receive 30,000 tokens
-    address private constant TEAM_WALLET = 0x1234567890123456789012345678901234567892; // CHANGE THIS!
-    uint256 private constant TEAM_ALLOCATION = 30_000 * 10**18;
+    // Team wallet - will receive 200,000 tokens
+    address private constant TEAM_WALLET = 0x6300811567bed7d69B5AC271060a7E298f99fddd;
+    uint256 private constant TEAM_ALLOCATION = 200_000 * 10**18;
     
-    // Development wallet - will receive 20,000 tokens
-    address private constant DEV_WALLET = 0x1234567890123456789012345678901234567893; // CHANGE THIS!
-    uint256 private constant DEV_ALLOCATION = 20_000 * 10**18;
+    // Advisor wallet - will receive 150,000 tokens  
+    address private constant ADVISOR_WALLET = 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
+    uint256 private constant ADVISOR_ALLOCATION = 150_000 * 10**18;
     
-    // Advisor wallet - will receive 10,000 tokens  
-    address private constant ADVISOR_WALLET = 0x1234567890123456789012345678901234567894; // CHANGE THIS!
-    uint256 private constant ADVISOR_ALLOCATION = 10_000 * 10**18;
+    // Development wallet - will remain with 100,000 tokens
+    address private constant DEV_WALLET = 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
+    uint256 private constant DEV_ALLOCATION = 100_000 * 10**18;
     
     // Community wallet - will receive 15,000 tokens
-    address private constant COMMUNITY_WALLET = 0x1234567890123456789012345678901234567895; // CHANGE THIS!
-    uint256 private constant COMMUNITY_ALLOCATION = 15_000 * 10**18;
+    address private constant COMMUNITY_WALLET = 0x1234567890123456789012345678901234567895;
+    uint256 private constant COMMUNITY_ALLOCATION = 0_000 * 10**18;
     
-    // Total to distribute: 125,000 tokens (from contract's 400,000)
-    uint256 private constant TOTAL_DISTRIBUTION = 125_000 * 10**18;
+    uint256 private constant TOTAL_DISTRIBUTION = 600_000 * 10**18;
     
     // Distribution state
     bool public initialDistributionCompleted;
@@ -93,6 +94,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     uint256 public constant MAX_WALLET = 20000 * 10**18;
     uint256 public constant COOLDOWN_PERIOD = 2 hours;
     uint256 public constant PAUSE_DURATION = 48 hours;
+    
+    // NEW: Exempt to Normal address restrictions
+    uint256 public constant MAX_EXEMPT_TO_NORMAL = 100 * 10**18;  // 100 tokens max
+    uint256 public constant EXEMPT_TO_NORMAL_COOLDOWN = 24 hours;  // 24 hour cooldown
     
     // Pause mechanism
     uint256 public pausedUntil;
@@ -115,6 +120,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
     mapping(address => uint256) public lastTransactionTime;
+    mapping(address => uint256) public lastExemptToNormalTime;  // NEW: Track exempt->normal transfers
     mapping(address => bool) public isBlacklisted;
     
     // Events
@@ -224,92 +230,40 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         emit InitialDistributionCompleted(TOTAL_DISTRIBUTION);
     }
     
-    /**
-     * @dev Set these wallets as exempt addresses after distribution
-     * This function automatically sets the distribution wallets as exempt
-     */
-    function setDistributionWalletsAsExempt() external onlyOwner whenNotLocked {
-        exemptAddress1 = MARKETING_WALLET;
-        exemptAddress2 = TEAM_WALLET;
-        exemptAddress3 = DEV_WALLET;
-        exemptAddress4 = ADVISOR_WALLET;
-        exemptAddress5 = COMMUNITY_WALLET;
-        
-        address[5] memory exempts = [exemptAddress1, exemptAddress2, exemptAddress3, exemptAddress4, exemptAddress5];
-        emit ExemptAddressesUpdated(exempts, pancakeswapRouter, pancakeswapFactory);
+    function isExemptAddress(address account) public view returns (bool) {
+        return account == owner ||
+               account == address(this) ||
+               account == exemptAddress1 ||
+               account == exemptAddress2 ||
+               account == exemptAddress3 ||
+               account == exemptAddress4 ||
+               account == exemptAddress5 ||
+               account == pancakeswapRouter ||
+               account == pancakeswapFactory;
     }
     
-    /**
-     * @dev Get distribution configuration (for verification before deployment)
-     */
-    function getDistributionConfig() external pure returns (
-        address marketing,
-        uint256 marketingAmount,
-        address team,
-        uint256 teamAmount,
-        address dev,
-        uint256 devAmount,
-        address advisor,
-        uint256 advisorAmount,
-        address community,
-        uint256 communityAmount,
-        uint256 totalAmount
-    ) {
-        marketing = MARKETING_WALLET;
-        marketingAmount = MARKETING_ALLOCATION;
-        team = TEAM_WALLET;
-        teamAmount = TEAM_ALLOCATION;
-        dev = DEV_WALLET;
-        devAmount = DEV_ALLOCATION;
-        advisor = ADVISOR_WALLET;
-        advisorAmount = ADVISOR_ALLOCATION;
-        community = COMMUNITY_WALLET;
-        communityAmount = COMMUNITY_ALLOCATION;
-        totalAmount = TOTAL_DISTRIBUTION;
-    }
-    
-    // ====================================
-    // REST OF CONTRACT FUNCTIONS (unchanged)
-    // ====================================
-    
-    function setExemptAddresses(
-        address[5] calldata _addresses,
-        address _router,
-        address _factory
+    function updateExemptAddresses(
+        address[5] memory addresses,
+        address router,
+        address factory
     ) external onlyOwner whenNotLocked {
-        require(_router != address(0), "Invalid router address");
-        require(_factory != address(0), "Invalid factory address");
+        require(router != address(0), "Router cannot be zero address");
+        require(factory != address(0), "Factory cannot be zero address");
         
-        exemptAddress1 = _addresses[0];
-        exemptAddress2 = _addresses[1];
-        exemptAddress3 = _addresses[2];
-        exemptAddress4 = _addresses[3];
-        exemptAddress5 = _addresses[4];
+        exemptAddress1 = addresses[0];
+        exemptAddress2 = addresses[1];
+        exemptAddress3 = addresses[2];
+        exemptAddress4 = addresses[3];
+        exemptAddress5 = addresses[4];
+        pancakeswapRouter = router;
+        pancakeswapFactory = factory;
         
-        pancakeswapRouter = _router;
-        pancakeswapFactory = _factory;
-        
-        emit ExemptAddressesUpdated(_addresses, _router, _factory);
+        emit ExemptAddressesUpdated(addresses, router, factory);
     }
     
-    function lockExemptAddresses() external onlyOwner whenNotLocked {
-        require(pancakeswapRouter != address(0), "Router not set");
-        require(pancakeswapFactory != address(0), "Factory not set");
-        
+    function lockExemptAddressesForever() external onlyOwner whenNotLocked {
         exemptAddressesLocked = true;
         emit ExemptAddressesLocked();
-    }
-    
-    function isExemptAddress(address account) public view returns (bool) {
-        return account == owner 
-            || account == address(this)
-            || account == pancakeswapRouter
-            || account == pancakeswapFactory
-            || account == exemptAddress1
-            || account == exemptAddress2
-            || account == exemptAddress3
-            || account == exemptAddress4
-            || account == exemptAddress5;
     }
     
     function isPaused() public view returns (bool) {
@@ -342,11 +296,11 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         }
     }
     
-    function transfer(address to, uint256 amount) public override whenNotPaused returns (bool) {
+    function transfer(address to, uint256 amount) public override returns (bool) {
         return _transfer(msg.sender, to, amount);
     }
     
-    function transferFrom(address from, address to, uint256 amount) public override whenNotPaused returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         uint256 currentAllowance = allowance[from][msg.sender];
         require(currentAllowance >= amount, "Insufficient allowance");
         
@@ -361,16 +315,43 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         require(from != address(0), "Transfer from zero address");
         require(to != address(0), "Transfer to zero address");
         require(balanceOf[from] >= amount, "Insufficient balance");
-        require(!isBlacklisted[from], "Sender is blacklisted");
-        require(!isBlacklisted[to], "Recipient is blacklisted");
         
         bool fromExempt = isExemptAddress(from);
         bool toExempt = isExemptAddress(to);
         
+        // Pause check - only for non-exempt addresses
+        if (!fromExempt && !toExempt) {
+            require(!isPaused(), "Contract is paused");
+        }
+        
+        // Blacklist check - only for non-exempt addresses
+        if (!fromExempt) {
+            require(!isBlacklisted[from], "Sender is blacklisted");
+        }
+        if (!toExempt) {
+            require(!isBlacklisted[to], "Recipient is blacklisted");
+        }
+        
+        // NEW: Check exempt to normal restrictions
+        if (fromExempt && !toExempt) {
+            // Exempt address sending to normal address
+            require(amount <= MAX_EXEMPT_TO_NORMAL, "Exempt to normal: exceeds 100 token limit");
+            
+            uint256 lastExemptTx = lastExemptToNormalTime[from];
+            if (lastExemptTx != 0) {
+                require(
+                    block.timestamp >= lastExemptTx + EXEMPT_TO_NORMAL_COOLDOWN,
+                    "Exempt to normal: must wait 24 hours between transfers"
+                );
+            }
+        }
+        
+        // Original trading lock check (only for normal to normal)
         if (!fromExempt && !toExempt) {
             require(block.timestamp >= tradingEnabledTime, "Trading locked for 48h");
         }
         
+        // Original limits check (only for normal to normal)
         if (!fromExempt && !toExempt) {
             require(amount <= MAX_TRANSACTION, "Exceeds max transaction (1000 tokens)");
             
@@ -389,13 +370,16 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             }
         }
         
+        // Execute transfer with or without fees
         if (fromExempt || toExempt) {
+            // No fees for exempt transfers
             unchecked {
                 balanceOf[from] -= amount;
                 balanceOf[to] += amount;
             }
             emit Transfer(from, to, amount);
         } else {
+            // Apply fees for normal to normal transfers
             uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
             uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
             uint256 transferAmount = amount - burnAmount - ownerAmount;
@@ -413,6 +397,11 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             emit TokensBurned(burnAmount);
             
             lastTransactionTime[from] = block.timestamp;
+        }
+        
+        // NEW: Update exempt to normal cooldown timer
+        if (fromExempt && !toExempt) {
+            lastExemptToNormalTime[from] = block.timestamp;
         }
         
         return true;
