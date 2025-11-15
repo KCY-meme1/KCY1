@@ -2,35 +2,38 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY1 Token (KCY-MEME-1) - FINAL CORRECTED VERSION
- * @dev Complete transaction rules:
+ * @title KCY1 Token (KCY-MEME-1) - v18
+ * @dev Complete rules:
  * 
- *      NORMAL USER transactions:
- *        ✓ 8% fees (3% burn + 5% owner)
+ *      FEES:
+ *      - Normal users: 0.08% total (0.03% burn + 0.05% owner)
+ *      - Exempt Slot → Normal: 0.008% total (0.003% burn + 0.005% owner)
+ *      - Exempt → Exempt: 0% (no fees)
+ * 
+ *      NORMAL USERS:
+ *        ✓ Can trade (buy/sell) through Router
+ *        ✗ CANNOT add/remove liquidity directly to Pair
+ *        ✓ 0.08% fees on all transactions
  *        ✓ 1,000 token max per transaction
  *        ✓ 2 hour cooldown
  *        ✓ 20,000 token max wallet
  *      
  *      EXEMPT (4 slots) ↔ EXEMPT/Router/Factory:
- *        ✓ NO fees
+ *        ✓ NO fees (0%)
  *        ✓ NO limits
+ *        ✓ CAN add/remove liquidity
  * 
  *      SPECIAL: EXEMPT (4 slots) → NORMAL user:
- *        ✓ 8% fees
+ *        ✓ 0.008% fees (10x lower!)
  *        ✓ 100 token max (not 1000!)
  *        ✓ 24 hour cooldown (not 2 hours!)
- *        ✓ Normal wallet limit applies to recipient
  * 
- *      Examples:
- *        - Normal → Normal: 8% fees, 1000 max, 2h cooldown
- *        - Normal → Exempt: 8% fees, 1000 max, 2h cooldown
- *        - Normal → Router: 8% fees, 1000 max, 2h cooldown
- *        - Exempt slot → Normal: 8% fees, 100 max, 24h cooldown ⚠️
- *        - Exempt → Exempt: NO fees, NO limits
- *        - Exempt → Router: NO fees, NO limits
- *        - Router → Normal: 8% fees, 1000 max, no cooldown
+ *      LOCKING:
+ *        - Exempt 4 slots: CAN be locked forever
+ *        - Router/Factory: NEVER locked, always updatable
+ *        - Liquidity Pairs: CAN be locked forever
  * 
- * @author Production Version - Final v3.0
+ * @author Production Version - v18
  */
 
 interface IERC20 {
@@ -43,6 +46,10 @@ interface IERC20 {
     
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
+interface IPancakeFactory {
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
 }
 
 abstract contract ReentrancyGuard {
@@ -89,12 +96,18 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     bool public initialDistributionCompleted;
     
     // ====================================
-    // Fee and Limit Configuration
+    // FEE STRUCTURE
     // ====================================
     
-    uint256 public constant BURN_FEE = 300;  // 3% burn
-    uint256 public constant OWNER_FEE = 500; // 5% to owner
-    uint256 public constant FEE_DENOMINATOR = 10000;
+    // Normal users: 0.08% total
+    uint256 public constant BURN_FEE = 30;     // 0.03% burn (30 basis points)
+    uint256 public constant OWNER_FEE = 50;    // 0.05% to owner (50 basis points)
+    
+    // Exempt Slot → Normal: 0.008% total (10x lower)
+    uint256 public constant EXEMPT_TO_NORMAL_BURN_FEE = 3;   // 0.003%
+    uint256 public constant EXEMPT_TO_NORMAL_OWNER_FEE = 5;  // 0.005%
+    
+    uint256 public constant FEE_DENOMINATOR = 100000;  // 100,000 for precision
     
     // Limits for NORMAL users
     uint256 public constant MAX_TRANSACTION = 1000 * 10**18;        // 1,000 tokens
@@ -115,12 +128,22 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     address public exemptAddress3;
     address public exemptAddress4;
     
-    // DEX addresses (Router/Factory are facilitators, not "slot exempt")
+    // DEX addresses (NOT locked, can always be updated)
     address public pancakeswapRouter;
     address public pancakeswapFactory;
     
-    // Lock mechanism
-    bool public exemptAddressesLocked;
+    // Lock mechanism (ONLY for 4 exempt slots, NOT for Router/Factory!)
+    bool public exemptSlotsLocked;
+    
+    // ====================================
+    // LIQUIDITY PAIR TRACKING
+    // ====================================
+    
+    // Track liquidity pair addresses to block normal users from adding/removing liquidity
+    mapping(address => bool) public isLiquidityPair;
+    
+    // Lock mechanism for liquidity pairs
+    bool public liquidityPairsLocked;
     
     // Mappings
     mapping(address => uint256) public override balanceOf;
@@ -133,12 +156,15 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     event TokensBurned(uint256 amount);
     event Paused(uint256 until);
     event Blacklisted(address indexed account, bool status);
-    event ExemptAddressesUpdated(address[4] addresses, address router, address factory);
-    event ExemptAddressesLocked();
+    event ExemptSlotsUpdated(address[4] slots);
+    event ExemptSlotsLocked();
+    event DEXAddressesUpdated(address indexed router, address indexed factory);
     event EmergencyTokensRescued(address indexed token, uint256 amount);
     event BNBWithdrawn(uint256 amount);
     event InitialDistributionCompleted(uint256 totalDistributed);
     event DistributionSent(address indexed recipient, uint256 amount);
+    event LiquidityPairUpdated(address indexed pair, bool status);
+    event LiquidityPairsLocked();
     
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -150,8 +176,13 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         _;
     }
     
-    modifier whenNotLocked() {
-        require(!exemptAddressesLocked, "Exempt addresses are locked forever");
+    modifier whenSlotsNotLocked() {
+        require(!exemptSlotsLocked, "Exempt slots are locked forever");
+        _;
+    }
+    
+    modifier whenPairsNotLocked() {
+        require(!liquidityPairsLocked, "Liquidity pairs are locked forever");
         _;
     }
     
@@ -206,6 +237,71 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     /**
+     * @dev STEP 1: VIEW - Get pair address from Factory (READ ONLY - doesn't add it)
+     * Call this first to see what the Pair address is
+     * 
+     * @param pairedToken The token to check pairing with KCY1 (e.g., WBNB, USDT, BUSD)
+     * @return pairAddress The address of the pair (address(0) if doesn't exist yet)
+     * 
+     * Example:
+     * getLiquidityPairAddress(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c) // Check KCY1/WBNB pair
+     * Returns: 0xABC...123 (the Pair contract address)
+     */
+    function getLiquidityPairAddress(address pairedToken) external view returns (address pairAddress) {
+        require(pairedToken != address(0), "Invalid token address");
+        require(pairedToken != address(this), "Cannot pair with itself");
+        pairAddress = IPancakeFactory(pancakeswapFactory).getPair(address(this), pairedToken);
+    }
+    
+    /**
+     * @dev STEP 2: MANUAL - Add liquidity pair address manually
+     * After seeing the pair address from getLiquidityPairAddress(), add it here
+     * Normal users will be blocked from sending tokens directly to these addresses
+     * Can only be called before pairs are locked
+     * 
+     * @param pair The exact Pair contract address to add
+     * @param status true to add, false to remove
+     * 
+     * Example:
+     * setLiquidityPair(0xABC...123, true) // Add the pair address you got from step 1
+     */
+    function setLiquidityPair(address pair, bool status) external onlyOwner whenPairsNotLocked {
+        require(pair != address(0), "Invalid pair address");
+        isLiquidityPair[pair] = status;
+        emit LiquidityPairUpdated(pair, status);
+    }
+    
+    /**
+     * @dev MANUAL BATCH: Add multiple pair addresses at once (if you have multiple pairs)
+     * Can only be called before pairs are locked
+     * 
+     * @param pairs Array of Pair contract addresses
+     * @param status true to add all, false to remove all
+     * 
+     * Example:
+     * address[] memory pairAddresses = [0xABC...123, 0xDEF...456];
+     * setLiquidityPairBatch(pairAddresses, true)
+     */
+    function setLiquidityPairBatch(address[] calldata pairs, bool status) external onlyOwner whenPairsNotLocked {
+        for (uint256 i = 0; i < pairs.length; i++) {
+            if (pairs[i] != address(0)) {
+                isLiquidityPair[pairs[i]] = status;
+                emit LiquidityPairUpdated(pairs[i], status);
+            }
+        }
+    }
+    
+    /**
+     * @dev Lock liquidity pair settings forever
+     * After calling this, no more pairs can be added or removed
+     * This is IRREVERSIBLE - use with caution!
+     */
+    function lockLiquidityPairsForever() external onlyOwner whenPairsNotLocked {
+        liquidityPairsLocked = true;
+        emit LiquidityPairsLocked();
+    }
+    
+    /**
      * @dev Check if address is fully exempt (for fees and limits)
      */
     function isExemptAddress(address account) public view returns (bool) {
@@ -221,7 +317,6 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     
     /**
      * @dev Check if address is one of the 4 exempt slots (not Router/Factory)
-     * These slots have special 100 token / 24h cooldown rules when sending to normal users
      */
     function isExemptSlot(address account) public view returns (bool) {
         return account == exemptAddress1 ||
@@ -230,27 +325,47 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                account == exemptAddress4;
     }
     
-    function updateExemptAddresses(
-        address[4] memory addresses,
-        address router,
-        address factory
-    ) external onlyOwner whenNotLocked {
+    /**
+     * @dev Update the 4 exempt slots
+     * Can only be called before slots are locked
+     * Router/Factory are updated separately via updateDEXAddresses()
+     */
+    function updateExemptSlots(address[4] memory slots) external onlyOwner whenSlotsNotLocked {
+        exemptAddress1 = slots[0];
+        exemptAddress2 = slots[1];
+        exemptAddress3 = slots[2];
+        exemptAddress4 = slots[3];
+        
+        emit ExemptSlotsUpdated(slots);
+    }
+    
+    /**
+     * @dev Lock the 4 exempt slots forever
+     * After calling this, the 4 exempt slots can NEVER be changed again
+     * Router/Factory remain updatable - they are NOT affected by this lock!
+     * This is IRREVERSIBLE - use with caution!
+     */
+    function lockExemptSlotsForever() external onlyOwner whenSlotsNotLocked {
+        exemptSlotsLocked = true;
+        emit ExemptSlotsLocked();
+    }
+    
+    /**
+     * @dev Update DEX addresses (Router and Factory)
+     * These can ALWAYS be updated - they are NEVER locked!
+     * This allows flexibility if PancakeSwap upgrades their contracts
+     * 
+     * @param router New PancakeSwap Router address
+     * @param factory New PancakeSwap Factory address
+     */
+    function updateDEXAddresses(address router, address factory) external onlyOwner {
         require(router != address(0), "Router cannot be zero address");
         require(factory != address(0), "Factory cannot be zero address");
         
-        exemptAddress1 = addresses[0];
-        exemptAddress2 = addresses[1];
-        exemptAddress3 = addresses[2];
-        exemptAddress4 = addresses[3];
         pancakeswapRouter = router;
         pancakeswapFactory = factory;
         
-        emit ExemptAddressesUpdated(addresses, router, factory);
-    }
-    
-    function lockExemptAddressesForever() external onlyOwner whenNotLocked {
-        exemptAddressesLocked = true;
-        emit ExemptAddressesLocked();
+        emit DEXAddressesUpdated(router, factory);
     }
     
     function isPaused() public view returns (bool) {
@@ -301,10 +416,15 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     /**
      * @dev Main transfer logic with all rules
      * 
+     * NEW RULE: Normal users CANNOT send directly to Liquidity Pairs
+     * - This blocks adding/removing liquidity for normal users
+     * - Trading through Router is still allowed (Router sends to Pair, not user)
+     * 
      * Logic flow:
-     * 1. If BOTH exempt → No fees, no limits
-     * 2. If Exempt Slot → Normal → 8% fees, 100 token max, 24h cooldown
-     * 3. If any other case with normal → 8% fees, 1000 token max, 2h cooldown
+     * 1. Block normal users from sending to Pair directly
+     * 2. If BOTH exempt → No fees, no limits
+     * 3. If Exempt Slot → Normal → 0.008% fees, 100 token max, 24h cooldown
+     * 4. If any other case with normal → 0.08% fees, 1000 token max, 2h cooldown
      */
     function _transfer(address from, address to, uint256 amount) internal returns (bool) {
         require(from != address(0), "Transfer from zero address");
@@ -314,6 +434,21 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         bool fromExempt = isExemptAddress(from);
         bool toExempt = isExemptAddress(to);
         bool fromExemptSlot = isExemptSlot(from);
+        
+        // ============================================
+        // NEW: BLOCK NORMAL USERS FROM LIQUIDITY OPERATIONS
+        // ============================================
+        // Normal users CANNOT send directly to Pair contracts
+        // This blocks adding liquidity, but allows trading through Router
+        if (!fromExempt && isLiquidityPair[to]) {
+            revert("Normal users cannot add liquidity directly");
+        }
+        
+        // Normal users CANNOT receive directly from Pair contracts (during liquidity removal)
+        // Exception: Router can facilitate (Router → User is ok)
+        if (!toExempt && isLiquidityPair[from] && msg.sender != pancakeswapRouter) {
+            revert("Normal users cannot remove liquidity directly");
+        }
         
         // Determine transaction type
         bool isNormalTransaction = !fromExempt || !toExempt;
@@ -405,8 +540,25 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                 balanceOf[to] += amount;
             }
             emit Transfer(from, to, amount);
+        } else if (isExemptSlotToNormal) {
+            // EXEMPT SLOT → NORMAL: Apply 0.008% fees (0.003% burn + 0.005% owner)
+            uint256 burnAmount = (amount * EXEMPT_TO_NORMAL_BURN_FEE) / FEE_DENOMINATOR;
+            uint256 ownerAmount = (amount * EXEMPT_TO_NORMAL_OWNER_FEE) / FEE_DENOMINATOR;
+            uint256 transferAmount = amount - burnAmount - ownerAmount;
+            
+            unchecked {
+                balanceOf[from] -= amount;
+                balanceOf[to] += transferAmount;
+                balanceOf[owner] += ownerAmount;
+                totalSupply -= burnAmount;
+            }
+            
+            emit Transfer(from, to, transferAmount);
+            emit Transfer(from, owner, ownerAmount);
+            emit Transfer(from, address(0), burnAmount);
+            emit TokensBurned(burnAmount);
         } else {
-            // AT LEAST ONE NORMAL (or Exempt Slot → Normal): Apply 8% fees
+            // AT LEAST ONE NORMAL: Apply 0.08% fees (0.03% burn + 0.05% owner)
             uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
             uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
             uint256 transferAmount = amount - burnAmount - ownerAmount;
@@ -506,18 +658,18 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     function getExemptAddresses() external view returns (
-        address[4] memory addresses,
+        address[4] memory slots,
         address router,
         address factory,
-        bool locked
+        bool slotsLocked
     ) {
-        addresses[0] = exemptAddress1;
-        addresses[1] = exemptAddress2;
-        addresses[2] = exemptAddress3;
-        addresses[3] = exemptAddress4;
+        slots[0] = exemptAddress1;
+        slots[1] = exemptAddress2;
+        slots[2] = exemptAddress3;
+        slots[3] = exemptAddress4;
         router = pancakeswapRouter;
         factory = pancakeswapFactory;
-        locked = exemptAddressesLocked;
+        slotsLocked = exemptSlotsLocked;
     }
     
     function rescueTokens(address tokenAddress, uint256 amount) external onlyOwner nonReentrant {
