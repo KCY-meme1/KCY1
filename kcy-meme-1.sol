@@ -7,11 +7,11 @@ pragma solidity ^0.8.20;
  *      - Automatic initial distribution from DEV_WALLET_mm_vis
  *      - 4 exempt address slots (for team/marketing/advisors)
  *      - Exempt slot-to-normal transfer restrictions (100 tokens, 24h cooldown)
- *      - Router/Factory exempt from fees but NOT from 100 token limit
- *      - Only exempt addresses can add/remove liquidity
- *      - Normal users can trade with 1,000 token limit (buy/sell)
+ *      - Fees (8%) apply when at least ONE party is normal
+ *      - NO fees only when BOTH parties are exempt
+ *      - Normal users: 1,000 token limit, 2h cooldown
  *      - Pause and Blacklist do NOT apply to exempt addresses
- * @author Production Version - Final v1.1
+ * @author Production Version - Final v1.2
  */
 
 interface IERC20 {
@@ -366,34 +366,18 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         }
         
         // Execute transfer with or without fees
-        // NO FEES: Both exempt OR Exempt→Normal OR Normal→Exempt slot with 100 token restriction
-        // HAS FEES: Normal→Normal OR Normal→Exempt (Router/Factory for trading)
+        // NO FEES: ONLY when BOTH are exempt
+        // HAS FEES: When at least ONE is normal
         
-        bool applyFees = false;
-        
-        if (!fromExempt && !toExempt) {
-            // Normal → Normal: Always has fees
-            applyFees = true;
-        } else if (!fromExempt && toExempt) {
-            // Normal → Exempt: Has fees (trading/liquidity)
-            applyFees = true;
-        } else if (fromExempt && !toExempt) {
-            // Exempt → Normal: NO fees (includes Router→User for buying)
-            applyFees = false;
-        } else {
-            // Exempt → Exempt: NO fees
-            applyFees = false;
-        }
-        
-        if (!applyFees) {
-            // No fees
+        if (fromExempt && toExempt) {
+            // Both exempt: No fees
             unchecked {
                 balanceOf[from] -= amount;
                 balanceOf[to] += amount;
             }
             emit Transfer(from, to, amount);
         } else {
-            // Apply fees
+            // At least one is normal: Apply fees (8% = 3% burn + 5% owner)
             uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
             uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
             uint256 transferAmount = amount - burnAmount - ownerAmount;
