@@ -2,16 +2,35 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY1 Token (KCY-MEME-1)
- * @dev Enhanced version with:
- *      - Automatic initial distribution from DEV_WALLET_mm_vis
- *      - 4 exempt address slots (for team/marketing/advisors)
- *      - Exempt slot-to-normal transfer restrictions (100 tokens, 24h cooldown)
- *      - Fees (8%) apply when at least ONE party is normal
- *      - NO fees only when BOTH parties are exempt
- *      - Normal users: 1,000 token limit, 2h cooldown
- *      - Pause and Blacklist do NOT apply to exempt addresses
- * @author Production Version - Final v1.2
+ * @title KCY1 Token (KCY-MEME-1) - FINAL CORRECTED VERSION
+ * @dev Complete transaction rules:
+ * 
+ *      NORMAL USER transactions:
+ *        ✓ 8% fees (3% burn + 5% owner)
+ *        ✓ 1,000 token max per transaction
+ *        ✓ 2 hour cooldown
+ *        ✓ 20,000 token max wallet
+ *      
+ *      EXEMPT (4 slots) ↔ EXEMPT/Router/Factory:
+ *        ✓ NO fees
+ *        ✓ NO limits
+ * 
+ *      SPECIAL: EXEMPT (4 slots) → NORMAL user:
+ *        ✓ 8% fees
+ *        ✓ 100 token max (not 1000!)
+ *        ✓ 24 hour cooldown (not 2 hours!)
+ *        ✓ Normal wallet limit applies to recipient
+ * 
+ *      Examples:
+ *        - Normal → Normal: 8% fees, 1000 max, 2h cooldown
+ *        - Normal → Exempt: 8% fees, 1000 max, 2h cooldown
+ *        - Normal → Router: 8% fees, 1000 max, 2h cooldown
+ *        - Exempt slot → Normal: 8% fees, 100 max, 24h cooldown ⚠️
+ *        - Exempt → Exempt: NO fees, NO limits
+ *        - Exempt → Router: NO fees, NO limits
+ *        - Router → Normal: 8% fees, 1000 max, no cooldown
+ * 
+ * @author Production Version - Final v3.0
  */
 
 interface IERC20 {
@@ -58,57 +77,45 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     // AUTOMATIC DISTRIBUTION CONFIGURATION
     // ====================================
     
-    // Development wallet (Main) - receives 600,000 tokens at deployment, distributes 500,000, keeps 100,000
     address private constant DEV_WALLET_mm_vis = 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
-    
-    // Marketing wallet - will receive 150,000 tokens from DEV_WALLET_mm_vis
     address private constant MARKETING_WALLET_tng = 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
     uint256 private constant MARKETING_ALLOCATION = 150_000 * 10**18;
-    
-    // Team wallet - will receive 200,000 tokens from DEV_WALLET_mm_vis
     address private constant TEAM_WALLET_trz_hdn = 0x6300811567bed7d69B5AC271060a7E298f99fddd;
     uint256 private constant TEAM_ALLOCATION = 200_000 * 10**18;
-    
-    // Advisor wallet - will receive 150,000 tokens from DEV_WALLET_mm_vis
     address private constant ADVISOR_WALLET_trz_vis = 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
     uint256 private constant ADVISOR_ALLOCATION = 150_000 * 10**18;
-    
-    // Total to distribute from DEV_WALLET_mm_vis: 500,000 tokens
-    // Remaining in DEV_WALLET_mm_vis after distribution: 100,000 tokens
     uint256 private constant TOTAL_DISTRIBUTION = 500_000 * 10**18;
     
-    // Distribution state
     bool public initialDistributionCompleted;
     
     // ====================================
-    // Rest of contract variables
+    // Fee and Limit Configuration
     // ====================================
     
-    // Fee structure (in basis points, 1 bp = 0.01%)
     uint256 public constant BURN_FEE = 300;  // 3% burn
     uint256 public constant OWNER_FEE = 500; // 5% to owner
     uint256 public constant FEE_DENOMINATOR = 10000;
     
-    // Transaction limits
-    uint256 public constant MAX_TRANSACTION = 1000 * 10**18;
-    uint256 public constant MAX_WALLET = 20000 * 10**18;
-    uint256 public constant COOLDOWN_PERIOD = 2 hours;
+    // Limits for NORMAL users
+    uint256 public constant MAX_TRANSACTION = 1000 * 10**18;        // 1,000 tokens
+    uint256 public constant MAX_WALLET = 20000 * 10**18;            // 20,000 tokens
+    uint256 public constant COOLDOWN_PERIOD = 2 hours;              // 2 hour cooldown
     uint256 public constant PAUSE_DURATION = 48 hours;
     
-    // NEW: Exempt to Normal address restrictions
-    uint256 public constant MAX_EXEMPT_TO_NORMAL = 100 * 10**18;  // 100 tokens max
-    uint256 public constant EXEMPT_TO_NORMAL_COOLDOWN = 24 hours;  // 24 hour cooldown
+    // SPECIAL: Exempt slot → Normal user limits
+    uint256 public constant MAX_EXEMPT_TO_NORMAL = 100 * 10**18;    // 100 tokens max
+    uint256 public constant EXEMPT_TO_NORMAL_COOLDOWN = 24 hours;   // 24 hour cooldown
     
     // Pause mechanism
     uint256 public pausedUntil;
     
-    // Exempt addresses (4 slots)
+    // Exempt addresses (4 slots ONLY - these have special rules)
     address public exemptAddress1;
     address public exemptAddress2;
     address public exemptAddress3;
     address public exemptAddress4;
     
-    // DEX addresses
+    // DEX addresses (Router/Factory are facilitators, not "slot exempt")
     address public pancakeswapRouter;
     address public pancakeswapFactory;
     
@@ -118,8 +125,8 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     // Mappings
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
-    mapping(address => uint256) public lastTransactionTime;
-    mapping(address => uint256) public lastExemptToNormalTime;  // NEW: Track exempt->normal transfers
+    mapping(address => uint256) public lastTransactionTime;          // For normal users (2h cooldown)
+    mapping(address => uint256) public lastExemptToNormalTime;       // For exempt slots (24h cooldown)
     mapping(address => bool) public isBlacklisted;
     
     // Events
@@ -133,7 +140,6 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     event InitialDistributionCompleted(uint256 totalDistributed);
     event DistributionSent(address indexed recipient, uint256 amount);
     
-    // Modifiers
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
         _;
@@ -154,15 +160,12 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         tradingEnabledTime = block.timestamp + 48 hours;
         totalSupply = 1_000_000 * 10**decimals;
         
-        // Initial distribution: 60% to DEV_WALLET_mm_vis, 40% to contract
         balanceOf[DEV_WALLET_mm_vis] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
         
-        // Initialize PancakeSwap addresses (BSC Mainnet)
         pancakeswapRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
         pancakeswapFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
         
-        // Exempt addresses start empty (4 slots)
         exemptAddress1 = address(0);
         exemptAddress2 = address(0);
         exemptAddress3 = address(0);
@@ -172,20 +175,12 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         emit Transfer(address(0), address(this), 400_000 * 10**decimals);
     }
     
-    /**
-     * @dev AUTOMATIC DISTRIBUTION FUNCTION
-     * Distributes tokens from DEV_WALLET_mm_vis to preset wallets
-     * Can only be called once by owner
-     * Distributes 500,000 tokens total, leaving 100,000 in DEV_WALLET_mm_vis
-     */
     function distributeInitialAllocations() external onlyOwner {
         require(!initialDistributionCompleted, "Distribution already completed");
-        require(balanceOf[DEV_WALLET_mm_vis] >= TOTAL_DISTRIBUTION, "Insufficient DEV_WALLET_mm_vis balance");
+        require(balanceOf[DEV_WALLET_mm_vis] >= TOTAL_DISTRIBUTION, "Insufficient DEV_WALLET balance");
         
-        // Mark as completed first to prevent reentrancy
         initialDistributionCompleted = true;
         
-        // Distribute to Marketing Wallet
         if (MARKETING_WALLET_tng != address(0) && MARKETING_ALLOCATION > 0) {
             balanceOf[DEV_WALLET_mm_vis] -= MARKETING_ALLOCATION;
             balanceOf[MARKETING_WALLET_tng] += MARKETING_ALLOCATION;
@@ -193,7 +188,6 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             emit DistributionSent(MARKETING_WALLET_tng, MARKETING_ALLOCATION);
         }
         
-        // Distribute to Team Wallet
         if (TEAM_WALLET_trz_hdn != address(0) && TEAM_ALLOCATION > 0) {
             balanceOf[DEV_WALLET_mm_vis] -= TEAM_ALLOCATION;
             balanceOf[TEAM_WALLET_trz_hdn] += TEAM_ALLOCATION;
@@ -201,7 +195,6 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             emit DistributionSent(TEAM_WALLET_trz_hdn, TEAM_ALLOCATION);
         }
         
-        // Distribute to Advisor Wallet
         if (ADVISOR_WALLET_trz_vis != address(0) && ADVISOR_ALLOCATION > 0) {
             balanceOf[DEV_WALLET_mm_vis] -= ADVISOR_ALLOCATION;
             balanceOf[ADVISOR_WALLET_trz_vis] += ADVISOR_ALLOCATION;
@@ -209,12 +202,12 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             emit DistributionSent(ADVISOR_WALLET_trz_vis, ADVISOR_ALLOCATION);
         }
         
-        // DEV_WALLET_mm_vis keeps the remaining 100,000 tokens automatically
-        // No need to transfer to itself
-        
         emit InitialDistributionCompleted(TOTAL_DISTRIBUTION);
     }
     
+    /**
+     * @dev Check if address is fully exempt (for fees and limits)
+     */
     function isExemptAddress(address account) public view returns (bool) {
         return account == owner ||
                account == address(this) ||
@@ -224,6 +217,17 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                account == exemptAddress4 ||
                account == pancakeswapRouter ||
                account == pancakeswapFactory;
+    }
+    
+    /**
+     * @dev Check if address is one of the 4 exempt slots (not Router/Factory)
+     * These slots have special 100 token / 24h cooldown rules when sending to normal users
+     */
+    function isExemptSlot(address account) public view returns (bool) {
+        return account == exemptAddress1 ||
+               account == exemptAddress2 ||
+               account == exemptAddress3 ||
+               account == exemptAddress4;
     }
     
     function updateExemptAddresses(
@@ -294,6 +298,14 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         return _transfer(from, to, amount);
     }
     
+    /**
+     * @dev Main transfer logic with all rules
+     * 
+     * Logic flow:
+     * 1. If BOTH exempt → No fees, no limits
+     * 2. If Exempt Slot → Normal → 8% fees, 100 token max, 24h cooldown
+     * 3. If any other case with normal → 8% fees, 1000 token max, 2h cooldown
+     */
     function _transfer(address from, address to, uint256 amount) internal returns (bool) {
         require(from != address(0), "Transfer from zero address");
         require(to != address(0), "Transfer to zero address");
@@ -301,13 +313,22 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         
         bool fromExempt = isExemptAddress(from);
         bool toExempt = isExemptAddress(to);
+        bool fromExemptSlot = isExemptSlot(from);
         
-        // Pause check - only for non-exempt addresses
-        if (!fromExempt && !toExempt) {
+        // Determine transaction type
+        bool isNormalTransaction = !fromExempt || !toExempt;
+        bool isExemptSlotToNormal = fromExemptSlot && !toExempt;
+        
+        // ============================================
+        // PAUSE CHECK - Only for normal transactions
+        // ============================================
+        if (isNormalTransaction) {
             require(!isPaused(), "Contract is paused");
         }
         
-        // Blacklist check - only for non-exempt addresses
+        // ============================================
+        // BLACKLIST CHECK - Only for normal addresses
+        // ============================================
         if (!fromExempt) {
             require(!isBlacklisted[from], "Sender is blacklisted");
         }
@@ -315,38 +336,44 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             require(!isBlacklisted[to], "Recipient is blacklisted");
         }
         
-        // NEW: Check exempt slot to normal restrictions (ONLY for the 4 slots, NOT Router/Factory)
-        // This ensures only the 4 exempt slots have the 100 token limit when sending to normal users
-        // Router/Factory are exempt for fees but NOT restricted by this 100 token limit
-        bool isSlotExempt = (from == exemptAddress1 || from == exemptAddress2 || 
-                             from == exemptAddress3 || from == exemptAddress4);
+        // ============================================
+        // TRADING LOCK CHECK - Only for normal users
+        // ============================================
+        if (!fromExempt) {
+            require(block.timestamp >= tradingEnabledTime, "Trading locked for 48h");
+        }
         
-        if (isSlotExempt && !toExempt) {
-            // One of the 4 exempt slots sending to normal address
-            require(amount <= MAX_EXEMPT_TO_NORMAL, "Exempt slot to normal: exceeds 100 token limit");
+        // ============================================
+        // SPECIAL CASE: Exempt Slot → Normal User
+        // ============================================
+        if (isExemptSlotToNormal) {
+            // 100 token maximum (not 1000!)
+            require(amount <= MAX_EXEMPT_TO_NORMAL, "Exempt slot to normal: max 100 tokens");
             
+            // 24 hour cooldown (not 2 hours!)
             uint256 lastExemptTx = lastExemptToNormalTime[from];
             if (lastExemptTx != 0) {
                 require(
                     block.timestamp >= lastExemptTx + EXEMPT_TO_NORMAL_COOLDOWN,
-                    "Exempt slot to normal: must wait 24 hours between transfers"
+                    "Exempt slot to normal: wait 24 hours"
                 );
             }
+            
+            // Wallet limit still applies to normal recipient
+            uint256 recipientBalance = balanceOf[to];
+            require(
+                recipientBalance + amount <= MAX_WALLET,
+                "Recipient would exceed max wallet (20,000 tokens)"
+            );
         }
-        
-        // Original trading lock check (only for normal users)
-        if (!fromExempt) {
-            // Normal users cannot trade during lock period (unless sending to exempt)
-            if (!toExempt) {
-                require(block.timestamp >= tradingEnabledTime, "Trading locked for 48h");
-            }
-        }
-        
-        // Transaction limits for normal users (both normal→normal AND normal→exempt)
-        if (!fromExempt) {
+        // ============================================
+        // NORMAL TRANSACTION LIMITS (not Exempt Slot → Normal)
+        // ============================================
+        else if (isNormalTransaction) {
+            // 1,000 token maximum for normal transactions
             require(amount <= MAX_TRANSACTION, "Exceeds max transaction (1000 tokens)");
             
-            // Wallet limit only for normal→normal (not when sending to exempt addresses like Router)
+            // Wallet limit - only check for normal recipient
             if (!toExempt) {
                 uint256 recipientBalance = balanceOf[to];
                 require(
@@ -355,29 +382,31 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                 );
             }
             
-            // Cooldown for all normal user transactions
-            uint256 lastTx = lastTransactionTime[from];
-            if (lastTx != 0) {
-                require(
-                    block.timestamp >= lastTx + COOLDOWN_PERIOD,
-                    "Must wait 2 hours between transactions"
-                );
+            // 2 hour cooldown - only for normal sender
+            if (!fromExempt) {
+                uint256 lastTx = lastTransactionTime[from];
+                if (lastTx != 0) {
+                    require(
+                        block.timestamp >= lastTx + COOLDOWN_PERIOD,
+                        "Must wait 2 hours between transactions"
+                    );
+                }
             }
         }
         
-        // Execute transfer with or without fees
-        // NO FEES: ONLY when BOTH are exempt
-        // HAS FEES: When at least ONE is normal
+        // ============================================
+        // EXECUTE TRANSFER WITH OR WITHOUT FEES
+        // ============================================
         
         if (fromExempt && toExempt) {
-            // Both exempt: No fees
+            // BOTH EXEMPT: No fees, no limits
             unchecked {
                 balanceOf[from] -= amount;
                 balanceOf[to] += amount;
             }
             emit Transfer(from, to, amount);
         } else {
-            // At least one is normal: Apply fees (8% = 3% burn + 5% owner)
+            // AT LEAST ONE NORMAL (or Exempt Slot → Normal): Apply 8% fees
             uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
             uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
             uint256 transferAmount = amount - burnAmount - ownerAmount;
@@ -395,13 +424,17 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             emit TokensBurned(burnAmount);
         }
         
-        // Update cooldown timer for normal users
+        // ============================================
+        // UPDATE COOLDOWN TIMERS
+        // ============================================
+        
+        // Update normal user cooldown (2 hours)
         if (!fromExempt) {
             lastTransactionTime[from] = block.timestamp;
         }
         
-        // NEW: Update exempt slot to normal cooldown timer (ONLY for the 4 slots)
-        if (isSlotExempt && !toExempt) {
+        // Update exempt slot to normal cooldown (24 hours)
+        if (isExemptSlotToNormal) {
             lastExemptToNormalTime[from] = block.timestamp;
         }
         
