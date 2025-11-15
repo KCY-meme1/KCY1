@@ -2,12 +2,13 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY1 Token - VERSION 3.2 WITH EXEMPT PRIVILEGES
+ * @title KCY1 Token (KCY-MEME-1)
  * @dev Enhanced version with:
- *      - Automatic initial distribution
+ *      - Automatic initial distribution from DEV_WALLET_mm_vis
+ *      - 4 exempt address slots
  *      - Exempt-to-normal transfer restrictions (100 tokens, 24h cooldown)
  *      - Pause and Blacklist do NOT apply to exempt addresses
- * @author Production Version with Full Exempt Privileges
+ * @author Production Version - Final
  */
 
 interface IERC20 {
@@ -53,29 +54,25 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     // ====================================
     // AUTOMATIC DISTRIBUTION CONFIGURATION
     // ====================================
-    // CHANGE THESE VALUES BEFORE DEPLOYMENT!
     
-    // Marketing wallet - will receive 150,000 tokens
-    address private constant MARKETING_WALLET = 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
+    // Development wallet (Main) - receives 600,000 tokens at deployment, distributes 500,000, keeps 100,000
+    address private constant DEV_WALLET_mm_vis = 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
+    
+    // Marketing wallet - will receive 150,000 tokens from DEV_WALLET_mm_vis
+    address private constant MARKETING_WALLET_tng = 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
     uint256 private constant MARKETING_ALLOCATION = 150_000 * 10**18;
     
-    // Team wallet - will receive 200,000 tokens
-    address private constant TEAM_WALLET = 0x6300811567bed7d69B5AC271060a7E298f99fddd;
+    // Team wallet - will receive 200,000 tokens from DEV_WALLET_mm_vis
+    address private constant TEAM_WALLET_trz_hdn = 0x6300811567bed7d69B5AC271060a7E298f99fddd;
     uint256 private constant TEAM_ALLOCATION = 200_000 * 10**18;
     
-    // Advisor wallet - will receive 150,000 tokens  
-    address private constant ADVISOR_WALLET = 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
+    // Advisor wallet - will receive 150,000 tokens from DEV_WALLET_mm_vis
+    address private constant ADVISOR_WALLET_trz_vis = 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
     uint256 private constant ADVISOR_ALLOCATION = 150_000 * 10**18;
     
-    // Development wallet - will remain with 100,000 tokens
-    address private constant DEV_WALLET = 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
-    uint256 private constant DEV_ALLOCATION = 100_000 * 10**18;
-    
-    // Community wallet - will receive 15,000 tokens
-    address private constant COMMUNITY_WALLET = 0x1234567890123456789012345678901234567895;
-    uint256 private constant COMMUNITY_ALLOCATION = 0_000 * 10**18;
-    
-    uint256 private constant TOTAL_DISTRIBUTION = 600_000 * 10**18;
+    // Total to distribute from DEV_WALLET_mm_vis: 500,000 tokens
+    // Remaining in DEV_WALLET_mm_vis after distribution: 100,000 tokens
+    uint256 private constant TOTAL_DISTRIBUTION = 500_000 * 10**18;
     
     // Distribution state
     bool public initialDistributionCompleted;
@@ -102,12 +99,11 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     // Pause mechanism
     uint256 public pausedUntil;
     
-    // Exempt addresses
+    // Exempt addresses (4 slots)
     address public exemptAddress1;
     address public exemptAddress2;
     address public exemptAddress3;
     address public exemptAddress4;
-    address public exemptAddress5;
     
     // DEX addresses
     address public pancakeswapRouter;
@@ -127,7 +123,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     event TokensBurned(uint256 amount);
     event Paused(uint256 until);
     event Blacklisted(address indexed account, bool status);
-    event ExemptAddressesUpdated(address[5] addresses, address router, address factory);
+    event ExemptAddressesUpdated(address[4] addresses, address router, address factory);
     event ExemptAddressesLocked();
     event EmergencyTokensRescued(address indexed token, uint256 amount);
     event BNBWithdrawn(uint256 amount);
@@ -155,77 +151,63 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         tradingEnabledTime = block.timestamp + 48 hours;
         totalSupply = 1_000_000 * 10**decimals;
         
-        // Initial distribution: 60% to owner, 40% to contract
-        balanceOf[owner] = 600_000 * 10**decimals;
+        // Initial distribution: 60% to DEV_WALLET_mm_vis, 40% to contract
+        balanceOf[DEV_WALLET_mm_vis] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
         
         // Initialize PancakeSwap addresses (BSC Mainnet)
         pancakeswapRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
         pancakeswapFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
         
-        // Exempt addresses start empty
+        // Exempt addresses start empty (4 slots)
         exemptAddress1 = address(0);
         exemptAddress2 = address(0);
         exemptAddress3 = address(0);
         exemptAddress4 = address(0);
-        exemptAddress5 = address(0);
         
-        emit Transfer(address(0), owner, 600_000 * 10**decimals);
+        emit Transfer(address(0), DEV_WALLET_mm_vis, 600_000 * 10**decimals);
         emit Transfer(address(0), address(this), 400_000 * 10**decimals);
     }
     
     /**
      * @dev AUTOMATIC DISTRIBUTION FUNCTION
-     * Distributes hardcoded amounts to preset wallets
+     * Distributes tokens from DEV_WALLET_mm_vis to preset wallets
      * Can only be called once by owner
-     * Uses contract's balance (from the initial 400,000 tokens)
+     * Distributes 500,000 tokens total, leaving 100,000 in DEV_WALLET_mm_vis
      */
     function distributeInitialAllocations() external onlyOwner {
         require(!initialDistributionCompleted, "Distribution already completed");
-        require(balanceOf[address(this)] >= TOTAL_DISTRIBUTION, "Insufficient contract balance");
+        require(balanceOf[DEV_WALLET_mm_vis] >= TOTAL_DISTRIBUTION, "Insufficient DEV_WALLET_mm_vis balance");
         
         // Mark as completed first to prevent reentrancy
         initialDistributionCompleted = true;
         
         // Distribute to Marketing Wallet
-        if (MARKETING_WALLET != address(0) && MARKETING_ALLOCATION > 0) {
-            balanceOf[address(this)] -= MARKETING_ALLOCATION;
-            balanceOf[MARKETING_WALLET] += MARKETING_ALLOCATION;
-            emit Transfer(address(this), MARKETING_WALLET, MARKETING_ALLOCATION);
-            emit DistributionSent(MARKETING_WALLET, MARKETING_ALLOCATION);
+        if (MARKETING_WALLET_tng != address(0) && MARKETING_ALLOCATION > 0) {
+            balanceOf[DEV_WALLET_mm_vis] -= MARKETING_ALLOCATION;
+            balanceOf[MARKETING_WALLET_tng] += MARKETING_ALLOCATION;
+            emit Transfer(DEV_WALLET_mm_vis, MARKETING_WALLET_tng, MARKETING_ALLOCATION);
+            emit DistributionSent(MARKETING_WALLET_tng, MARKETING_ALLOCATION);
         }
         
         // Distribute to Team Wallet
-        if (TEAM_WALLET != address(0) && TEAM_ALLOCATION > 0) {
-            balanceOf[address(this)] -= TEAM_ALLOCATION;
-            balanceOf[TEAM_WALLET] += TEAM_ALLOCATION;
-            emit Transfer(address(this), TEAM_WALLET, TEAM_ALLOCATION);
-            emit DistributionSent(TEAM_WALLET, TEAM_ALLOCATION);
-        }
-        
-        // Distribute to Development Wallet
-        if (DEV_WALLET != address(0) && DEV_ALLOCATION > 0) {
-            balanceOf[address(this)] -= DEV_ALLOCATION;
-            balanceOf[DEV_WALLET] += DEV_ALLOCATION;
-            emit Transfer(address(this), DEV_WALLET, DEV_ALLOCATION);
-            emit DistributionSent(DEV_WALLET, DEV_ALLOCATION);
+        if (TEAM_WALLET_trz_hdn != address(0) && TEAM_ALLOCATION > 0) {
+            balanceOf[DEV_WALLET_mm_vis] -= TEAM_ALLOCATION;
+            balanceOf[TEAM_WALLET_trz_hdn] += TEAM_ALLOCATION;
+            emit Transfer(DEV_WALLET_mm_vis, TEAM_WALLET_trz_hdn, TEAM_ALLOCATION);
+            emit DistributionSent(TEAM_WALLET_trz_hdn, TEAM_ALLOCATION);
         }
         
         // Distribute to Advisor Wallet
-        if (ADVISOR_WALLET != address(0) && ADVISOR_ALLOCATION > 0) {
-            balanceOf[address(this)] -= ADVISOR_ALLOCATION;
-            balanceOf[ADVISOR_WALLET] += ADVISOR_ALLOCATION;
-            emit Transfer(address(this), ADVISOR_WALLET, ADVISOR_ALLOCATION);
-            emit DistributionSent(ADVISOR_WALLET, ADVISOR_ALLOCATION);
+        if (ADVISOR_WALLET_trz_vis != address(0) && ADVISOR_ALLOCATION > 0) {
+            balanceOf[DEV_WALLET_mm_vis] -= ADVISOR_ALLOCATION;
+            balanceOf[ADVISOR_WALLET_trz_vis] += ADVISOR_ALLOCATION;
+            emit Transfer(DEV_WALLET_mm_vis, ADVISOR_WALLET_trz_vis, ADVISOR_ALLOCATION);
+            emit DistributionSent(ADVISOR_WALLET_trz_vis, ADVISOR_ALLOCATION);
         }
         
-        // Distribute to Community Wallet
-        if (COMMUNITY_WALLET != address(0) && COMMUNITY_ALLOCATION > 0) {
-            balanceOf[address(this)] -= COMMUNITY_ALLOCATION;
-            balanceOf[COMMUNITY_WALLET] += COMMUNITY_ALLOCATION;
-            emit Transfer(address(this), COMMUNITY_WALLET, COMMUNITY_ALLOCATION);
-            emit DistributionSent(COMMUNITY_WALLET, COMMUNITY_ALLOCATION);
-        }
+        // DEV_WALLET_mm_vis keeps the remaining 100,000 tokens automatically
+        // No need to transfer to itself
         
         emit InitialDistributionCompleted(TOTAL_DISTRIBUTION);
     }
@@ -237,13 +219,12 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                account == exemptAddress2 ||
                account == exemptAddress3 ||
                account == exemptAddress4 ||
-               account == exemptAddress5 ||
                account == pancakeswapRouter ||
                account == pancakeswapFactory;
     }
     
     function updateExemptAddresses(
-        address[5] memory addresses,
+        address[4] memory addresses,
         address router,
         address factory
     ) external onlyOwner whenNotLocked {
@@ -254,7 +235,6 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         exemptAddress2 = addresses[1];
         exemptAddress3 = addresses[2];
         exemptAddress4 = addresses[3];
-        exemptAddress5 = addresses[4];
         pancakeswapRouter = router;
         pancakeswapFactory = factory;
         
@@ -472,7 +452,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     function getExemptAddresses() external view returns (
-        address[5] memory addresses,
+        address[4] memory addresses,
         address router,
         address factory,
         bool locked
@@ -481,7 +461,6 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         addresses[1] = exemptAddress2;
         addresses[2] = exemptAddress3;
         addresses[3] = exemptAddress4;
-        addresses[4] = exemptAddress5;
         router = pancakeswapRouter;
         factory = pancakeswapFactory;
         locked = exemptAddressesLocked;
