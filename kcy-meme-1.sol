@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY1 Token (KCY-MEME-1) - v18
+ * @title KCY-meme-1 Token (KCY1) - v19
  * @dev Complete rules:
  * 
  *      FEES:
  *      - Normal users: 0.08% total (0.03% burn + 0.05% owner)
- *      - Exempt Slot → Normal: 0.008% total (0.003% burn + 0.005% owner)
+ *      - Exempt Slot → Normal: 0.008% total (0.003% burn + 0.005% owner) [10x lower]
  *      - Exempt → Exempt: 0% (no fees)
  * 
  *      NORMAL USERS:
@@ -24,7 +24,7 @@ pragma solidity ^0.8.20;
  *        ✓ CAN add/remove liquidity
  * 
  *      SPECIAL: EXEMPT (4 slots) → NORMAL user:
- *        ✓ 0.008% fees (10x lower!)
+ *        ✓ 0.008% fees (10x lower - same constants divided by 10!)
  *        ✓ 100 token max (not 1000!)
  *        ✓ 24 hour cooldown (not 2 hours!)
  * 
@@ -33,7 +33,7 @@ pragma solidity ^0.8.20;
  *        - Router/Factory: NEVER locked, always updatable
  *        - Liquidity Pairs: CAN be locked forever
  * 
- * @author Production Version - v18
+ * @author Production Version - v19
  */
 
 interface IERC20 {
