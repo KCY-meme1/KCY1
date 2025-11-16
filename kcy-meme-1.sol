@@ -2,13 +2,12 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY-meme-1 Token (KCY1) - v19
+ * @title KCY-meme-1 Token (KCY1) - v24
  * @dev Complete rules:
  * 
- *      FEES:
- *      - Normal users: 0.08% total (0.03% burn + 0.05% owner)
- *      - Exempt Slot → Normal: 0.008% total (0.003% burn + 0.005% owner) [10x lower]
- *      - Exempt → Exempt: 0% (no fees)
+ *      FEES: 0.08% total (0.03% burn + 0.05% owner)
+ *      - Applied when at least one party is normal user
+ *      - SAME fee for ALL cases (normal and Exempt Slot → Normal)
  * 
  *      NORMAL USERS:
  *        ✓ Can trade (buy/sell) through Router
@@ -24,7 +23,7 @@ pragma solidity ^0.8.20;
  *        ✓ CAN add/remove liquidity
  * 
  *      SPECIAL: EXEMPT (4 slots) → NORMAL user:
- *        ✓ 0.008% fees (10x lower - same constants divided by 10!)
+ *        ✓ 0.08% fees (SAME as normal!)
  *        ✓ 100 token max (not 1000!)
  *        ✓ 24 hour cooldown (not 2 hours!)
  * 
@@ -33,7 +32,11 @@ pragma solidity ^0.8.20;
  *        - Router/Factory: NEVER locked, always updatable
  *        - Liquidity Pairs: CAN be locked forever
  * 
- * @author Production Version - v19
+ *      DEPLOYMENT:
+ *        - Testnet (chainid 97): YOUR testnet wallets + Testnet Router/Factory
+ *        - Mainnet (chainid 56): Real mainnet wallets + Mainnet Router/Factory
+ * 
+ * @author Production Version - v24
  */
 
 interface IERC20 {
@@ -70,89 +73,60 @@ abstract contract ReentrancyGuard {
 }
 
 contract KCY1Token is IERC20, ReentrancyGuard {
-    // Token metadata
-    string public constant name = "KCY1";
+    string public constant name = "KCY-meme-1";
     string public constant symbol = "KCY1";
     uint8 public constant decimals = 18;
     uint256 public override totalSupply;
     
-    // Ownership and trading control
     address public immutable owner;
     uint256 public immutable tradingEnabledTime;
+    bool public immutable isTestnet;
     
-    // ====================================
-    // AUTOMATIC DISTRIBUTION CONFIGURATION
-    // ====================================
+    address private immutable DEVw_mv;
+    address private immutable Mw_tng;
+    address private immutable Tw_trz_hdn;
+    address private immutable Aw_trzV;
     
-    address private constant DEV_WALLET_mm_vis = 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
-    address private constant MARKETING_WALLET_tng = 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
-    uint256 private constant MARKETING_ALLOCATION = 150_000 * 10**18;
-    address private constant TEAM_WALLET_trz_hdn = 0x6300811567bed7d69B5AC271060a7E298f99fddd;
-    uint256 private constant TEAM_ALLOCATION = 200_000 * 10**18;
-    address private constant ADVISOR_WALLET_trz_vis = 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
-    uint256 private constant ADVISOR_ALLOCATION = 150_000 * 10**18;
-    uint256 private constant TOTAL_DISTRIBUTION = 500_000 * 10**18;
+    uint256 private constant Mrkt_alloc = 150_000 * 10**18;
+    uint256 private constant T_alloc = 200_000 * 10**18;
+    uint256 private constant Adv_alloc = 150_000 * 10**18;
+    uint256 private constant Tot_dist = 500_000 * 10**18;
     
     bool public initialDistributionCompleted;
     
-    // ====================================
-    // FEE STRUCTURE
-    // ====================================
+    uint256 public constant BURN_FEE = 30;
+    uint256 public constant OWNER_FEE = 50;
+    uint256 public constant FEE_DENOMINATOR = 100000;
     
-    // Normal users: 0.08% total
-    uint256 public constant BURN_FEE = 30;     // 0.03% burn (30 basis points)
-    uint256 public constant OWNER_FEE = 50;    // 0.05% to owner (50 basis points)
-    
-    // Exempt Slot → Normal: 0.008% total (10x lower)
-    uint256 public constant EXEMPT_TO_NORMAL_BURN_FEE = 3;   // 0.003%
-    uint256 public constant EXEMPT_TO_NORMAL_OWNER_FEE = 5;  // 0.005%
-    
-    uint256 public constant FEE_DENOMINATOR = 100000;  // 100,000 for precision
-    
-    // Limits for NORMAL users
-    uint256 public constant MAX_TRANSACTION = 1000 * 10**18;        // 1,000 tokens
-    uint256 public constant MAX_WALLET = 20000 * 10**18;            // 20,000 tokens
-    uint256 public constant COOLDOWN_PERIOD = 2 hours;              // 2 hour cooldown
+    uint256 public constant MAX_TRANSACTION = 1000 * 10**18;
+    uint256 public constant MAX_WALLET = 20000 * 10**18;
+    uint256 public constant COOLDOWN_PERIOD = 2 hours;
     uint256 public constant PAUSE_DURATION = 48 hours;
     
-    // SPECIAL: Exempt slot → Normal user limits
-    uint256 public constant MAX_EXEMPT_TO_NORMAL = 100 * 10**18;    // 100 tokens max
-    uint256 public constant EXEMPT_TO_NORMAL_COOLDOWN = 24 hours;   // 24 hour cooldown
+    uint256 public constant MAX_EXEMPT_TO_NORMAL = 100 * 10**18;
+    uint256 public constant EXEMPT_TO_NORMAL_COOLDOWN = 24 hours;
     
-    // Pause mechanism
     uint256 public pausedUntil;
     
-    // Exempt addresses (4 slots ONLY - these have special rules)
-    address public exemptAddress1;
-    address public exemptAddress2;
-    address public exemptAddress3;
-    address public exemptAddress4;
+    address public eAddr1;
+    address public eAddr2;
+    address public eAddr3;
+    address public eAddr4;
     
-    // DEX addresses (NOT locked, can always be updated)
-    address public pancakeswapRouter;
-    address public pancakeswapFactory;
+    address public pncswpRouter;
+    address public pncswpFactory;
     
-    // Lock mechanism (ONLY for 4 exempt slots, NOT for Router/Factory!)
     bool public exemptSlotsLocked;
     
-    // ====================================
-    // LIQUIDITY PAIR TRACKING
-    // ====================================
-    
-    // Track liquidity pair addresses to block normal users from adding/removing liquidity
     mapping(address => bool) public isLiquidityPair;
-    
-    // Lock mechanism for liquidity pairs
     bool public liquidityPairsLocked;
     
-    // Mappings
     mapping(address => uint256) public override balanceOf;
     mapping(address => mapping(address => uint256)) public override allowance;
-    mapping(address => uint256) public lastTransactionTime;          // For normal users (2h cooldown)
-    mapping(address => uint256) public lastExemptToNormalTime;       // For exempt slots (24h cooldown)
+    mapping(address => uint256) public lastTransactionTime;
+    mapping(address => uint256) public lastExemptToNormalTime;
     mapping(address => bool) public isBlacklisted;
     
-    // Events
     event TokensBurned(uint256 amount);
     event Paused(uint256 until);
     event Blacklisted(address indexed account, bool status);
@@ -172,17 +146,17 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     modifier whenNotPaused() {
-        require(!isPaused(), "Contract is paused");
+        require(!isPaused(), "Paused");
         _;
     }
     
     modifier whenSlotsNotLocked() {
-        require(!exemptSlotsLocked, "Exempt slots are locked forever");
+        require(!exemptSlotsLocked, "Slots locked");
         _;
     }
     
     modifier whenPairsNotLocked() {
-        require(!liquidityPairsLocked, "Liquidity pairs are locked forever");
+        require(!liquidityPairsLocked, "Pairs locked");
         _;
     }
     
@@ -191,97 +165,78 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         tradingEnabledTime = block.timestamp + 48 hours;
         totalSupply = 1_000_000 * 10**decimals;
         
-        balanceOf[DEV_WALLET_mm_vis] = 600_000 * 10**decimals;
+        if (block.chainid == 97) {
+            isTestnet = true;
+            DEVw_mv = 0xYOUR_TESTNET_DEV_WALLET;
+            Mw_tng = 0xYOUR_TESTNET_MARKETING_WALLET;
+            Tw_trz_hdn = 0xYOUR_TESTNET_TEAM_WALLET;
+            Aw_trzV = 0xYOUR_TESTNET_ADVISOR_WALLET;
+            pncswpRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
+            pncswpFactory = 0x6725F303b657a9451d8BA641348b6761A6CC7a17;
+        } else {
+            isTestnet = false;
+            DEVw_mv = 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
+            Mw_tng = 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
+            Tw_trz_hdn = 0x6300811567bed7d69B5AC271060a7E298f99fddd;
+            Aw_trzV = 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
+            pncswpRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+            pncswpFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
+        }
+        
+        balanceOf[DEVw_mv] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
         
-        pancakeswapRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
-        pancakeswapFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
+        eAddr1 = address(0);
+        eAddr2 = address(0);
+        eAddr3 = address(0);
+        eAddr4 = address(0);
         
-        exemptAddress1 = address(0);
-        exemptAddress2 = address(0);
-        exemptAddress3 = address(0);
-        exemptAddress4 = address(0);
-        
-        emit Transfer(address(0), DEV_WALLET_mm_vis, 600_000 * 10**decimals);
+        emit Transfer(address(0), DEVw_mv, 600_000 * 10**decimals);
         emit Transfer(address(0), address(this), 400_000 * 10**decimals);
     }
     
     function distributeInitialAllocations() external onlyOwner {
-        require(!initialDistributionCompleted, "Distribution already completed");
-        require(balanceOf[DEV_WALLET_mm_vis] >= TOTAL_DISTRIBUTION, "Insufficient DEV_WALLET balance");
+        require(!initialDistributionCompleted, "Dist completed");
+        require(balanceOf[DEVw_mv] >= Tot_dist, "Dw balance low");
         
         initialDistributionCompleted = true;
         
-        if (MARKETING_WALLET_tng != address(0) && MARKETING_ALLOCATION > 0) {
-            balanceOf[DEV_WALLET_mm_vis] -= MARKETING_ALLOCATION;
-            balanceOf[MARKETING_WALLET_tng] += MARKETING_ALLOCATION;
-            emit Transfer(DEV_WALLET_mm_vis, MARKETING_WALLET_tng, MARKETING_ALLOCATION);
-            emit DistributionSent(MARKETING_WALLET_tng, MARKETING_ALLOCATION);
+        if (Mw_tng != address(0) && Mrkt_alloc > 0) {
+            balanceOf[DEVw_mv] -= Mrkt_alloc;
+            balanceOf[Mw_tng] += Mrkt_alloc;
+            emit Transfer(DEVw_mv, Mw_tng, Mrkt_alloc);
+            emit DistributionSent(Mw_tng, Mrkt_alloc);
         }
         
-        if (TEAM_WALLET_trz_hdn != address(0) && TEAM_ALLOCATION > 0) {
-            balanceOf[DEV_WALLET_mm_vis] -= TEAM_ALLOCATION;
-            balanceOf[TEAM_WALLET_trz_hdn] += TEAM_ALLOCATION;
-            emit Transfer(DEV_WALLET_mm_vis, TEAM_WALLET_trz_hdn, TEAM_ALLOCATION);
-            emit DistributionSent(TEAM_WALLET_trz_hdn, TEAM_ALLOCATION);
+        if (Tw_trz_hdn != address(0) && T_alloc > 0) {
+            balanceOf[DEVw_mv] -= T_alloc;
+            balanceOf[Tw_trz_hdn] += T_alloc;
+            emit Transfer(DEVw_mv, Tw_trz_hdn, T_alloc);
+            emit DistributionSent(Tw_trz_hdn, T_alloc);
         }
         
-        if (ADVISOR_WALLET_trz_vis != address(0) && ADVISOR_ALLOCATION > 0) {
-            balanceOf[DEV_WALLET_mm_vis] -= ADVISOR_ALLOCATION;
-            balanceOf[ADVISOR_WALLET_trz_vis] += ADVISOR_ALLOCATION;
-            emit Transfer(DEV_WALLET_mm_vis, ADVISOR_WALLET_trz_vis, ADVISOR_ALLOCATION);
-            emit DistributionSent(ADVISOR_WALLET_trz_vis, ADVISOR_ALLOCATION);
+        if (Aw_trzV != address(0) && Adv_alloc > 0) {
+            balanceOf[DEVw_mv] -= Adv_alloc;
+            balanceOf[Aw_trzV] += Adv_alloc;
+            emit Transfer(DEVw_mv, Aw_trzV, Adv_alloc);
+            emit DistributionSent(Aw_trzV, Adv_alloc);
         }
         
-        emit InitialDistributionCompleted(TOTAL_DISTRIBUTION);
+        emit InitialDistributionCompleted(Tot_dist);
     }
     
-    /**
-     * @dev STEP 1: VIEW - Get pair address from Factory (READ ONLY - doesn't add it)
-     * Call this first to see what the Pair address is
-     * 
-     * @param pairedToken The token to check pairing with KCY1 (e.g., WBNB, USDT, BUSD)
-     * @return pairAddress The address of the pair (address(0) if doesn't exist yet)
-     * 
-     * Example:
-     * getLiquidityPairAddress(0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c) // Check KCY1/WBNB pair
-     * Returns: 0xABC...123 (the Pair contract address)
-     */
     function getLiquidityPairAddress(address pairedToken) external view returns (address pairAddress) {
-        require(pairedToken != address(0), "Invalid token address");
-        require(pairedToken != address(this), "Cannot pair with itself");
-        pairAddress = IPancakeFactory(pancakeswapFactory).getPair(address(this), pairedToken);
+        require(pairedToken != address(0), "Invalid token");
+        require(pairedToken != address(this), "Cannot pair self");
+        pairAddress = IPancakeFactory(pncswpFactory).getPair(address(this), pairedToken);
     }
     
-    /**
-     * @dev STEP 2: MANUAL - Add liquidity pair address manually
-     * After seeing the pair address from getLiquidityPairAddress(), add it here
-     * Normal users will be blocked from sending tokens directly to these addresses
-     * Can only be called before pairs are locked
-     * 
-     * @param pair The exact Pair contract address to add
-     * @param status true to add, false to remove
-     * 
-     * Example:
-     * setLiquidityPair(0xABC...123, true) // Add the pair address you got from step 1
-     */
     function setLiquidityPair(address pair, bool status) external onlyOwner whenPairsNotLocked {
-        require(pair != address(0), "Invalid pair address");
+        require(pair != address(0), "Invalid pair");
         isLiquidityPair[pair] = status;
         emit LiquidityPairUpdated(pair, status);
     }
     
-    /**
-     * @dev MANUAL BATCH: Add multiple pair addresses at once (if you have multiple pairs)
-     * Can only be called before pairs are locked
-     * 
-     * @param pairs Array of Pair contract addresses
-     * @param status true to add all, false to remove all
-     * 
-     * Example:
-     * address[] memory pairAddresses = [0xABC...123, 0xDEF...456];
-     * setLiquidityPairBatch(pairAddresses, true)
-     */
     function setLiquidityPairBatch(address[] calldata pairs, bool status) external onlyOwner whenPairsNotLocked {
         for (uint256 i = 0; i < pairs.length; i++) {
             if (pairs[i] != address(0)) {
@@ -291,79 +246,49 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         }
     }
     
-    /**
-     * @dev Lock liquidity pair settings forever
-     * After calling this, no more pairs can be added or removed
-     * This is IRREVERSIBLE - use with caution!
-     */
     function lockLiquidityPairsForever() external onlyOwner whenPairsNotLocked {
         liquidityPairsLocked = true;
         emit LiquidityPairsLocked();
     }
     
-    /**
-     * @dev Check if address is fully exempt (for fees and limits)
-     */
     function isExemptAddress(address account) public view returns (bool) {
         return account == owner ||
                account == address(this) ||
-               account == exemptAddress1 ||
-               account == exemptAddress2 ||
-               account == exemptAddress3 ||
-               account == exemptAddress4 ||
-               account == pancakeswapRouter ||
-               account == pancakeswapFactory;
+               account == eAddr1 ||
+               account == eAddr2 ||
+               account == eAddr3 ||
+               account == eAddr4 ||
+               account == pncswpRouter ||
+               account == pncswpFactory;
     }
     
-    /**
-     * @dev Check if address is one of the 4 exempt slots (not Router/Factory)
-     */
     function isExemptSlot(address account) public view returns (bool) {
-        return account == exemptAddress1 ||
-               account == exemptAddress2 ||
-               account == exemptAddress3 ||
-               account == exemptAddress4;
+        return account == eAddr1 ||
+               account == eAddr2 ||
+               account == eAddr3 ||
+               account == eAddr4;
     }
     
-    /**
-     * @dev Update the 4 exempt slots
-     * Can only be called before slots are locked
-     * Router/Factory are updated separately via updateDEXAddresses()
-     */
     function updateExemptSlots(address[4] memory slots) external onlyOwner whenSlotsNotLocked {
-        exemptAddress1 = slots[0];
-        exemptAddress2 = slots[1];
-        exemptAddress3 = slots[2];
-        exemptAddress4 = slots[3];
+        eAddr1 = slots[0];
+        eAddr2 = slots[1];
+        eAddr3 = slots[2];
+        eAddr4 = slots[3];
         
         emit ExemptSlotsUpdated(slots);
     }
     
-    /**
-     * @dev Lock the 4 exempt slots forever
-     * After calling this, the 4 exempt slots can NEVER be changed again
-     * Router/Factory remain updatable - they are NOT affected by this lock!
-     * This is IRREVERSIBLE - use with caution!
-     */
     function lockExemptSlotsForever() external onlyOwner whenSlotsNotLocked {
         exemptSlotsLocked = true;
         emit ExemptSlotsLocked();
     }
     
-    /**
-     * @dev Update DEX addresses (Router and Factory)
-     * These can ALWAYS be updated - they are NEVER locked!
-     * This allows flexibility if PancakeSwap upgrades their contracts
-     * 
-     * @param router New PancakeSwap Router address
-     * @param factory New PancakeSwap Factory address
-     */
     function updateDEXAddresses(address router, address factory) external onlyOwner {
-        require(router != address(0), "Router cannot be zero address");
-        require(factory != address(0), "Factory cannot be zero address");
+        require(router != address(0), "Router zero");
+        require(factory != address(0), "Factory zero");
         
-        pancakeswapRouter = router;
-        pancakeswapFactory = factory;
+        pncswpRouter = router;
+        pncswpFactory = factory;
         
         emit DEXAddressesUpdated(router, factory);
     }
@@ -373,15 +298,15 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     function pause() external onlyOwner {
-        require(pausedUntil <= block.timestamp, "Already paused");
+        require(pausedUntil <= block.timestamp, "Paused");
         pausedUntil = block.timestamp + PAUSE_DURATION;
         emit Paused(pausedUntil);
     }
     
     function setBlacklist(address account, bool status) external onlyOwner {
-        require(account != owner, "Cannot blacklist owner");
-        require(account != address(this), "Cannot blacklist contract");
-        require(account != address(0), "Cannot blacklist zero address");
+        require(account != owner, "No owner");
+        require(account != address(this), "No contract");
+        require(account != address(0), "No zero");
         
         isBlacklisted[account] = status;
         emit Blacklisted(account, status);
@@ -404,7 +329,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     
     function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
         uint256 currentAllowance = allowance[from][msg.sender];
-        require(currentAllowance >= amount, "Insufficient allowance");
+        require(currentAllowance >= amount, "Low allowance");
         
         unchecked {
             allowance[from][msg.sender] = currentAllowance - amount;
@@ -413,152 +338,87 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         return _transfer(from, to, amount);
     }
     
-    /**
-     * @dev Main transfer logic with all rules
-     * 
-     * NEW RULE: Normal users CANNOT send directly to Liquidity Pairs
-     * - This blocks adding/removing liquidity for normal users
-     * - Trading through Router is still allowed (Router sends to Pair, not user)
-     * 
-     * Logic flow:
-     * 1. Block normal users from sending to Pair directly
-     * 2. If BOTH exempt → No fees, no limits
-     * 3. If Exempt Slot → Normal → 0.008% fees, 100 token max, 24h cooldown
-     * 4. If any other case with normal → 0.08% fees, 1000 token max, 2h cooldown
-     */
     function _transfer(address from, address to, uint256 amount) internal returns (bool) {
-        require(from != address(0), "Transfer from zero address");
-        require(to != address(0), "Transfer to zero address");
-        require(balanceOf[from] >= amount, "Insufficient balance");
+        require(from != address(0), "From zero");
+        require(to != address(0), "To zero");
+        require(balanceOf[from] >= amount, "Low balance");
         
         bool fromExempt = isExemptAddress(from);
         bool toExempt = isExemptAddress(to);
         bool fromExemptSlot = isExemptSlot(from);
         
-        // ============================================
-        // NEW: BLOCK NORMAL USERS FROM LIQUIDITY OPERATIONS
-        // ============================================
-        // Normal users CANNOT send directly to Pair contracts
-        // This blocks adding liquidity, but allows trading through Router
         if (!fromExempt && isLiquidityPair[to]) {
             revert("Normal users cannot add liquidity directly");
         }
         
-        // Normal users CANNOT receive directly from Pair contracts (during liquidity removal)
-        // Exception: Router can facilitate (Router → User is ok)
-        if (!toExempt && isLiquidityPair[from] && msg.sender != pancakeswapRouter) {
+        if (!toExempt && isLiquidityPair[from] && msg.sender != pncswpRouter) {
             revert("Normal users cannot remove liquidity directly");
         }
         
-        // Determine transaction type
         bool isNormalTransaction = !fromExempt || !toExempt;
         bool isExemptSlotToNormal = fromExemptSlot && !toExempt;
         
-        // ============================================
-        // PAUSE CHECK - Only for normal transactions
-        // ============================================
         if (isNormalTransaction) {
-            require(!isPaused(), "Contract is paused");
+            require(!isPaused(), "Paused");
         }
         
-        // ============================================
-        // BLACKLIST CHECK - Only for normal addresses
-        // ============================================
         if (!fromExempt) {
-            require(!isBlacklisted[from], "Sender is blacklisted");
+            require(!isBlacklisted[from], "Blacklisted");
         }
         if (!toExempt) {
-            require(!isBlacklisted[to], "Recipient is blacklisted");
+            require(!isBlacklisted[to], "Blacklisted");
         }
         
-        // ============================================
-        // TRADING LOCK CHECK - Only for normal users
-        // ============================================
         if (!fromExempt) {
-            require(block.timestamp >= tradingEnabledTime, "Trading locked for 48h");
+            require(block.timestamp >= tradingEnabledTime, "Locked 48h");
         }
         
-        // ============================================
-        // SPECIAL CASE: Exempt Slot → Normal User
-        // ============================================
         if (isExemptSlotToNormal) {
-            // 100 token maximum (not 1000!)
-            require(amount <= MAX_EXEMPT_TO_NORMAL, "Exempt slot to normal: max 100 tokens");
+            require(amount <= MAX_EXEMPT_TO_NORMAL, "Max 100");
             
-            // 24 hour cooldown (not 2 hours!)
             uint256 lastExemptTx = lastExemptToNormalTime[from];
             if (lastExemptTx != 0) {
                 require(
                     block.timestamp >= lastExemptTx + EXEMPT_TO_NORMAL_COOLDOWN,
-                    "Exempt slot to normal: wait 24 hours"
+                    "Wait 24h"
                 );
             }
             
-            // Wallet limit still applies to normal recipient
             uint256 recipientBalance = balanceOf[to];
             require(
                 recipientBalance + amount <= MAX_WALLET,
-                "Recipient would exceed max wallet (20,000 tokens)"
+                "Max wallet 20k"
             );
         }
-        // ============================================
-        // NORMAL TRANSACTION LIMITS (not Exempt Slot → Normal)
-        // ============================================
         else if (isNormalTransaction) {
-            // 1,000 token maximum for normal transactions
-            require(amount <= MAX_TRANSACTION, "Exceeds max transaction (1000 tokens)");
+            require(amount <= MAX_TRANSACTION, "Max 1000");
             
-            // Wallet limit - only check for normal recipient
             if (!toExempt) {
                 uint256 recipientBalance = balanceOf[to];
                 require(
                     recipientBalance + amount <= MAX_WALLET,
-                    "Recipient would exceed max wallet (20,000 tokens)"
+                    "Max wallet 20k"
                 );
             }
             
-            // 2 hour cooldown - only for normal sender
             if (!fromExempt) {
                 uint256 lastTx = lastTransactionTime[from];
                 if (lastTx != 0) {
                     require(
                         block.timestamp >= lastTx + COOLDOWN_PERIOD,
-                        "Must wait 2 hours between transactions"
+                        "Wait 2h"
                     );
                 }
             }
         }
         
-        // ============================================
-        // EXECUTE TRANSFER WITH OR WITHOUT FEES
-        // ============================================
-        
         if (fromExempt && toExempt) {
-            // BOTH EXEMPT: No fees, no limits
             unchecked {
                 balanceOf[from] -= amount;
                 balanceOf[to] += amount;
             }
             emit Transfer(from, to, amount);
-        } else if (isExemptSlotToNormal) {
-            // EXEMPT SLOT → NORMAL: Apply 0.008% fees (0.003% burn + 0.005% owner)
-            uint256 burnAmount = (amount * EXEMPT_TO_NORMAL_BURN_FEE) / FEE_DENOMINATOR;
-            uint256 ownerAmount = (amount * EXEMPT_TO_NORMAL_OWNER_FEE) / FEE_DENOMINATOR;
-            uint256 transferAmount = amount - burnAmount - ownerAmount;
-            
-            unchecked {
-                balanceOf[from] -= amount;
-                balanceOf[to] += transferAmount;
-                balanceOf[owner] += ownerAmount;
-                totalSupply -= burnAmount;
-            }
-            
-            emit Transfer(from, to, transferAmount);
-            emit Transfer(from, owner, ownerAmount);
-            emit Transfer(from, address(0), burnAmount);
-            emit TokensBurned(burnAmount);
         } else {
-            // AT LEAST ONE NORMAL: Apply 0.08% fees (0.03% burn + 0.05% owner)
             uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
             uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
             uint256 transferAmount = amount - burnAmount - ownerAmount;
@@ -576,16 +436,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             emit TokensBurned(burnAmount);
         }
         
-        // ============================================
-        // UPDATE COOLDOWN TIMERS
-        // ============================================
-        
-        // Update normal user cooldown (2 hours)
         if (!fromExempt) {
             lastTransactionTime[from] = block.timestamp;
         }
         
-        // Update exempt slot to normal cooldown (24 hours)
         if (isExemptSlotToNormal) {
             lastExemptToNormalTime[from] = block.timestamp;
         }
@@ -605,7 +459,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     
     function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
         uint256 currentAllowance = allowance[msg.sender][spender];
-        require(currentAllowance >= subtractedValue, "Decreased allowance below zero");
+        require(currentAllowance >= subtractedValue, "Low allowance");
         unchecked {
             _approve(msg.sender, spender, currentAllowance - subtractedValue);
         }
@@ -613,15 +467,15 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     function _approve(address tokenOwner, address spender, uint256 amount) internal {
-        require(tokenOwner != address(0), "Approve from zero address");
-        require(spender != address(0), "Approve to zero address");
+        require(tokenOwner != address(0), "From zero");
+        require(spender != address(0), "To zero");
         
         allowance[tokenOwner][spender] = amount;
         emit Approval(tokenOwner, spender, amount);
     }
     
     function withdrawCirculationTokens(uint256 amount) external onlyOwner {
-        require(balanceOf[address(this)] >= amount, "Insufficient contract balance");
+        require(balanceOf[address(this)] >= amount, "Low balance");
         
         unchecked {
             balanceOf[address(this)] -= amount;
@@ -632,7 +486,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     function burn(uint256 amount) external onlyOwner {
-        require(balanceOf[msg.sender] >= amount, "Insufficient balance");
+        require(balanceOf[msg.sender] >= amount, "Low balance");
         
         unchecked {
             balanceOf[msg.sender] -= amount;
@@ -663,21 +517,30 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         address factory,
         bool slotsLocked
     ) {
-        slots[0] = exemptAddress1;
-        slots[1] = exemptAddress2;
-        slots[2] = exemptAddress3;
-        slots[3] = exemptAddress4;
-        router = pancakeswapRouter;
-        factory = pancakeswapFactory;
+        slots[0] = eAddr1;
+        slots[1] = eAddr2;
+        slots[2] = eAddr3;
+        slots[3] = eAddr4;
+        router = pncswpRouter;
+        factory = pncswpFactory;
         slotsLocked = exemptSlotsLocked;
     }
     
+    function getDistributionAddresses() external view returns (
+        address devWallet,
+        address marketingWallet,
+        address teamWallet,
+        address advisorWallet
+    ) {
+        return (DEVw_mv, Mw_tng, Tw_trz_hdn, Aw_trzV);
+    }
+    
     function rescueTokens(address tokenAddress, uint256 amount) external onlyOwner nonReentrant {
-        require(tokenAddress != address(0), "Invalid token address");
-        require(tokenAddress != address(this), "Cannot rescue own KCY1 tokens");
+        require(tokenAddress != address(0), "Invalid token");
+        require(tokenAddress != address(this), "No rescue KCY1");
         
         IERC20 token = IERC20(tokenAddress);
-        require(token.transfer(owner, amount), "Rescue transfer failed");
+        require(token.transfer(owner, amount), "Rescue failed");
         
         emit EmergencyTokensRescued(tokenAddress, amount);
     }
@@ -686,10 +549,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     
     function withdrawBNB() external onlyOwner nonReentrant {
         uint256 balance = address(this).balance;
-        require(balance > 0, "No BNB to withdraw");
+        require(balance > 0, "No BNB");
         
         (bool success, ) = payable(owner).call{value: balance}("");
-        require(success, "BNB transfer failed");
+        require(success, "BNB failed");
         
         emit BNBWithdrawn(balance);
     }

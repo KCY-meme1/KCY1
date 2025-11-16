@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KCY1 Token - Official Site</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pepe-logo {
+            font-size: 120px;
+            margin-bottom: 20px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .tagline {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        nav {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            margin-bottom: 30px;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .nav-btn.active {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .page {
+            display: none;
+            animation: fadeIn 0.5s;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .countdown-timer {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .countdown-timer.hidden {
+            display: none;
+        }
+
+        .timer-display {
+            font-size: 3em;
+            font-weight: bold;
+            margin: 20px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .warning-box {
+            background: rgba(255, 193, 7, 0.2);
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .info-box {
+            background: rgba(33, 150, 243, 0.2);
+            border-left: 5px solid #2196f3;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .feature-item:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .feature-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            color: #ffc107;
+            margin: 10px 0;
+        }
+
+        .stat-label {
+            font-size: 1em;
+            opacity: 0.8;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 1.1em;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .blacklist-item {
+            background: rgba(255, 0, 0, 0.1);
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-family: monospace;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            margin-top: 50px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+        }
+
+        .contact-links {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .contact-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            flex: 1;
+            min-width: 250px;
+            text-align: center;
+        }
+
+        .contact-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            h1 { font-size: 2em; }
+            .timer-display { font-size: 2em; }
+            .nav-btn { padding: 10px 20px; font-size: 0.9em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="pepe-logo">🐸</div>
+            <h1>KCY1 Token</h1>
+            <p class="tagline">Мем токен с AntiWhale защита 🚀</p>
+        </header>
+
+        <nav>
+            <button class="nav-btn active" onclick="showPage('home')">🏠 Начало</button>
+            <button class="nav-btn" onclick="showPage('stats')">📊 Статистика</button>
+            <button class="nav-btn" onclick="showPage('blacklist')">🚫 Блоклист</button>
+            <button class="nav-btn" onclick="showPage('contact')">📞 Контакти</button>
+        </nav>
+
+        <!-- PAGE 1: HOME -->
+        <div id="home" class="page active">
+            <!-- Trading Lock Countdown -->
+                <div id="countdownTimer" class="countdown-timer">
+                <h2>⏰ Trading Lock активен!</h2>
+                <p>Търговията ще бъде активирана след:</p>
+                <div class="timer-display" id="timerDisplay">--:--:--</div>
+                <p style="opacity: 0.8;">Търпение, проектът стартира скоро! 🚀</p>
+            </div>
+
+            <div class="card">
+                <h2>⚠️ Важно за търговци!</h2>
+                <div class="warning-box">
+                    <h3>🛡️ AntiWhale Защита</h3>
+                    <p>KCY1 има специални ограничения за защита срещу големи купувачи (whales) и бот атаки:</p>
+                </div>
+
+                <div class="feature-grid">
+                    <div class="feature-item">
+                        <div class="feature-icon">⏱️</div>
+                        <h3>2 часа Cooldown</h3>
+                        <p>Между всяка твоя транзакция трябва да изминат минимум 2 часа</p>
+                    </div>
+
+                    <div class="feature-item">
+                        <div class="feature-icon">💼</div>
+                        <h3>20,000 токена</h3>
+                        <p>Максимален баланс на портфейл</p>
+                    </div>
+
+                    <div class="feature-item">
+                        <div class="feature-icon">📦</div>
+                        <h3>1,000 токена</h3>
+                        <p>Максимална сума на транзакция</p>
+                    </div>
+
+                    <div class="feature-item">
+                        <div class="feature-icon">💰</div>
+                        <h3>0.08% Такса</h3>
+                        <p>Много ниска такса (0.03% burn + 0.05% owner)</p>
+                    </div>
+
+                    <div class="feature-item">
+                        <div class="feature-icon">🔒</div>
+                        <h3>48ч Trading Lock</h3>
+                        <p>Първите 48 часа търговията е ограничена за защита на проекта</p>
+                    </div>
+
+                    <div class="feature-item">
+                        <div class="feature-icon">🚫</div>
+                        <h3>Без Директна Ликвидност</h3>
+                        <p>Обикновени потребители НЕ могат да добавят/премахват ликвидност</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🎯 Защо AntiWhale?</h2>
+                <div class="info-box">
+                    <p><strong>Защита на малките инвеститори:</strong> Ограниченията предпазват от големи купувачи, които биха манипулирали цената.</p>
+                    <p><strong>Стабилен растеж:</strong> Cooldown периодът предотвратява бот атаки и pump & dump схеми.</p>
+                    <p><strong>Честна търговия:</strong> Всички имат равни шансове да купят на добра цена.</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>💬 Поддръжка и Общност</h2>
+                <p style="margin-bottom: 20px;">За всички KCY проекти има собствен чат сървър, където можеш да получиш помощ, да задаваш въпроси и да се свържеш с общността!</p>
+                <a href="#contact" class="btn-primary" onclick="showPage('contact')">📞 Свържи се с нас</a>
+            </div>
+
+            <div class="card">
+                <h2>📋 Как да купя KCY1?</h2>
+                <ol style="line-height: 2; padding-left: 20px;">
+                    <li>Отвори PancakeSwap</li>
+                    <li>Connect твоя MetaMask/Trust Wallet</li>
+                    <li>Swap BNB → KCY1</li>
+                    <li>Потвърди транзакцията</li>
+                    <li>Изчакай 2 часа преди следваща транзакция</li>
+                </ol>
+                <div class="info-box" style="margin-top: 20px;">
+                    <strong>⚠️ Внимание:</strong> Не купувай повече от 1,000 токена наведнъж или повече от 20,000 общо!
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 2: STATS -->
+        <div id="stats" class="page">
+            <div class="card">
+                <h2>📊 Статистика на токена</h2>
+                <div id="statsLoading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Зареждане на данни...</p>
+                </div>
+                <div id="statsContent" style="display: none;">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">👥 Брой Holders</div>
+                            <div class="stat-value" id="holderCount">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">💰 Market Cap</div>
+                            <div class="stat-value" id="marketCap">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">🔄 Токени в обръщение</div>
+                            <div class="stat-value" id="circulatingSupply">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">💵 Цена (USD)</div>
+                            <div class="stat-value" id="tokenPrice">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">💧 Ликвидност</div>
+                            <div class="stat-value" id="liquidity">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">📈 24ч Обем</div>
+                            <div class="stat-value" id="volume24h">-</div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-top: 40px; margin-bottom: 20px;">💧 Активни Liquidity Pairs</h3>
+                    <div id="liquidityPairs">
+                        <div class="info-box">
+                            <p>Зареждане на liquidity pairs...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>📈 Как се изчислява Market Cap?</h2>
+                <div class="info-box">
+                    <p><strong>Market Cap = Цена на токен × Токени в обръщение</strong></p>
+                    <p>Показва общата пазарна стойност на всички KCY1 токени.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 3: BLACKLIST -->
+        <div id="blacklist" class="page">
+            <div class="card">
+                <h2>🚫 Блокирани адреси</h2>
+                <p style="margin-bottom: 20px;">Следните адреси са блокирани от търговия поради подозрителна активност или нарушения:</p>
+                
+                <div id="blacklistLoading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Зареждане на блоклист...</p>
+                </div>
+
+                <div id="blacklistContent" style="display: none;">
+                    <div id="blacklistItems"></div>
+                </div>
+
+                <div class="warning-box" style="margin-top: 30px;">
+                    <h3>⚠️ Какво означава да си блокиран?</h3>
+                    <p>• НЕ можеш да изпращаш токени</p>
+                    <p>• НЕ можеш да получаваш токени</p>
+                    <p>• НЕ можеш да търгуваш на DEX</p>
+                    <p><strong>Забележка:</strong> Exempt адресите игнорират блоклиста</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE 4: CONTACT -->
+        <div id="contact" class="page">
+            <div class="card">
+                <h2>📞 Свържи се с нас</h2>
+                <p style="text-align: center; margin-bottom: 30px;">Имаш въпроси? Нуждаеш се от помощ? Свържи се с екипа на KCY1!</p>
+
+                <div class="contact-links">
+                    <div class="contact-card">
+                        <div class="contact-icon">💬</div>
+                        <h3>Чат Сървър</h3>
+                        <p style="margin: 15px 0;">Присъедини се към общността и говори с екипа в реално време!</p>
+                        <a href="#" id="chatServerLink" class="btn-primary">Отвори Чат</a>
+                        <p style="margin-top: 10px; opacity: 0.7; font-size: 0.9em;" id="chatStatus">🔴 Скоро</p>
+                    </div>
+
+                    <div class="contact-card">
+                        <div class="contact-icon">📱</div>
+                        <h3>Чат Приложение</h3>
+                        <p style="margin: 15px 0;">Изтегли мобилното приложение за чат на KCY проекти</p>
+                        <a href="#" id="chatAppLink" class="btn-primary">Изтегли App</a>
+                        <p style="margin-top: 10px; opacity: 0.7; font-size: 0.9em;" id="appStatus">🔴 В разработка</p>
+                    </div>
+                </div>
+
+                <div class="info-box" style="margin-top: 30px;">
+                    <h3>🛡️ Поддръжка</h3>
+                    <p>Нашият екип предлага поддръжка за:</p>
+                    <ul style="margin-top: 10px; padding-left: 30px; line-height: 2;">
+                        <li>Помощ при покупка/продажба</li>
+                        <li>Технически въпроси за токена</li>
+                        <li>Въпроси за AntiWhale ограниченията</li>
+                        <li>Докладване на проблеми</li>
+                        <li>Предложения за подобрения</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🔗 Полезни връзки</h2>
+                <div style="line-height: 2.5;">
+                    <p>📄 <a href="#" style="color: #ffc107;" id="contractLink">Contract на BSCScan</a></p>
+                    <p>🥞 <a href="#" style="color: #ffc107;" id="pancakeswapLink">Купи на PancakeSwap</a></p>
+                    <p>📊 <a href="#" style="color: #ffc107;" id="chartLink">Live Chart</a></p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>© 2025 KCY1 Token. Всички права запазени.</p>
+            <p style="margin-top: 10px; opacity: 0.7;">🐸 Made with Pepe love 🐸</p>
+        </footer>
+    </div>
+
+    <script>
+        // Configuration - ПРОМЕНИ ТЕЗИ СТОЙНОСТИ СЛЕД DEPLOYMENT!
+        const CONFIG = {
+            contractAddress: '0xYOUR_CONTRACT_ADDRESS_HERE',
+            deploymentTimestamp: Math.floor(Date.now() / 1000), // Промени с реалния timestamp при deployment
+            bscScanUrl: 'https://bscscan.com',
+            pancakeswapUrl: 'https://pancakeswap.finance/swap',
+            chatServerUrl: '', // Добави URL когато е готов
+            chatAppUrl: '', // Добави URL когато е готов
+        };
+
+        // Page Navigation
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(pageId).classList.add('active');
+            event.target.classList.add('active');
+
+            // Load data when switching pages
+            if (pageId === 'stats') loadStats();
+            if (pageId === 'blacklist') loadBlacklist();
+        }
+
+        // Countdown Timer
+        function updateCountdown() {
+            const tradingEnabledTime = CONFIG.deploymentTimestamp + (48 * 60 * 60);
+            const now = Math.floor(Date.now() / 1000);
+            const remaining = tradingEnabledTime - now;
+
+            if (remaining <= 0) {
+                document.getElementById('countdownTimer').classList.add('hidden');
+                return;
+            }
+
+            const hours = Math.floor(remaining / 3600);
+            const minutes = Math.floor((remaining % 3600) / 60);
+            const seconds = remaining % 60;
+
+            document.getElementById('timerDisplay').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+            setTimeout(updateCountdown, 1000);
+        }
+
+        // Load Stats (Mock data - replace with real Web3 calls)
+        async function loadStats() {
+            document.getElementById('statsLoading').style.display = 'block';
+            document.getElementById('statsContent').style.display = 'none';
+
+            try {
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                // Mock data - REPLACE WITH REAL WEB3 CALLS
+                document.getElementById('holderCount').textContent = '1,234';
+                document.getElementById('marketCap').textContent = '$50,000';
+                document.getElementById('circulatingSupply').textContent = '1M';
+                document.getElementById('tokenPrice').textContent = '$0.00005';
+                document.getElementById('liquidity').textContent = '$25,000';
+                document.getElementById('volume24h').textContent = '$5,000';
+
+                // Liquidity Pairs
+                const pairsHtml = `
+                    <div class="feature-item">
+                        <h3>🥞 KCY1/WBNB</h3>
+                        <p>Главен pair на PancakeSwap</p>
+                        <p style="color: #ffc107; font-weight: bold;">Ликвидност: $20,000</p>
+                    </div>
+                `;
+                document.getElementById('liquidityPairs').innerHTML = pairsHtml;
+
+                document.getElementById('statsLoading').style.display = 'none';
+                document.getElementById('statsContent').style.display = 'block';
+            } catch (error) {
+                document.getElementById('statsLoading').innerHTML = 
+                    '<p style="color: #f44336;">❌ Грешка при зареждане на данни</p>';
+            }
+        }
+
+        // Load Blacklist
+        async function loadBlacklist() {
+            document.getElementById('blacklistLoading').style.display = 'block';
+            document.getElementById('blacklistContent').style.display = 'none';
+
+            try {
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                // Mock data - REPLACE WITH REAL CONTRACT CALLS
+                const blacklistedAddresses = [
+                    // Добави реални блокирани адреси тук
+                ];
+
+                if (blacklistedAddresses.length === 0) {
+                    document.getElementById('blacklistItems').innerHTML = 
+                        '<div class="info-box">✅ Няма блокирани адреси в момента</div>';
+                } else {
+                    const html = blacklistedAddresses.map(addr => 
+                        `<div class="blacklist-item">🚫 ${addr}</div>`
+                    ).join('');
+                    document.getElementById('blacklistItems').innerHTML = html;
+                }
+
+                document.getElementById('blacklistLoading').style.display = 'none';
+                document.getElementById('blacklistContent').style.display = 'block';
+            } catch (error) {
+                document.getElementById('blacklistLoading').innerHTML = 
+                    '<p style="color: #f44336;">❌ Грешка при зареждане на блоклист</p>';
+            }
+        }
+
+        // Initialize Links
+        function initializeLinks() {
+            if (CONFIG.contractAddress !== '0xYOUR_CONTRACT_ADDRESS_HERE') {
+                document.getElementById('contractLink').href = 
+                    `${CONFIG.bscScanUrl}/token/${CONFIG.contractAddress}`;
+                document.getElementById('pancakeswapLink').href = 
+                    `${CONFIG.pancakeswapUrl}?outputCurrency=${CONFIG.contractAddress}`;
+                document.getElementById('chartLink').href = 
+                    `https://dexscreener.com/bsc/${CONFIG.contractAddress}`;
+            }
+
+            // Chat links
+            if (CONFIG.chatServerUrl) {
+                document.getElementById('chatServerLink').href = CONFIG.chatServerUrl;
+                document.getElementById('chatStatus').innerHTML = '🟢 Активен';
+                document.getElementById('chatStatus').style.color = '#4caf50';
+            }
+
+            if (CONFIG.chatAppUrl) {
+                document.getElementById('chatAppLink').href = CONFIG.chatAppUrl;
+                document.getElementById('appStatus').innerHTML = '🟢 Наличен';
+                document.getElementById('appStatus').style.color = '#4caf50';
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            updateCountdown();
+            initializeLinks();
+        });
+    </script>
+</body>
+</html>

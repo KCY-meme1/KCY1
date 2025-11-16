@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KCY1 Token - Пълна Документация</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            line-height: 1.8;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .back-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            text-decoration: none;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .doc-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        h2 {
+            color: #ffc107;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.8em;
+            border-bottom: 2px solid #ffc107;
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            color: #fff;
+            margin-top: 25px;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.1);
+            font-weight: bold;
+            color: #ffc107;
+        }
+
+        code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            color: #ffc107;
+        }
+
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            border-left: 4px solid #ffc107;
+        }
+
+        .warning-box {
+            background: rgba(255, 193, 7, 0.2);
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .info-box {
+            background: rgba(33, 150, 243, 0.2);
+            border-left: 5px solid #2196f3;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .success-box {
+            background: rgba(76, 175, 80, 0.2);
+            border-left: 5px solid #4caf50;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        .emoji {
+            font-size: 1.5em;
+            margin-right: 10px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            margin-top: 50px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 20px;
+        }
+
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+            .doc-section {
+                background: white;
+                border: 1px solid #ccc;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🐸 KCY1 Token</h1>
+            <p>Пълна техническа документация</p>
+            <p style="opacity: 0.7; margin-top: 10px; font-size: 0.9em;">⚠️ Вътрешен документ - Само за owner и одитори</p>
+        </header>
+
+        <!-- TABLE OF CONTENTS -->
+        <div class="doc-section">
+            <h2>📋 Съдържание</h2>
+            <ol>
+                <li><a href="#basic-info" style="color: #ffc107;">Основна информация</a></li>
+                <li><a href="#distribution" style="color: #ffc107;">Начално разпределение</a></li>
+                <li><a href="#exempt-system" style="color: #ffc107;">Exempt система</a></li>
+                <li><a href="#fees" style="color: #ffc107;">Такси</a></li>
+                <li><a href="#transaction-rules" style="color: #ffc107;">Правила за транзакции</a></li>
+                <li><a href="#trading-lock" style="color: #ffc107;">Trading Lock</a></li>
+                <li><a href="#cooldown" style="color: #ffc107;">Cooldown система</a></li>
+                <li><a href="#liquidity" style="color: #ffc107;">Liquidity Pair управление</a></li>
+                <li><a href="#pause" style="color: #ffc107;">Pause механизъм</a></li>
+                <li><a href="#blacklist" style="color: #ffc107;">Blacklist система</a></li>
+                <li><a href="#limits" style="color: #ffc107;">Лимити</a></li>
+                <li><a href="#owner-functions" style="color: #ffc107;">Owner функции</a></li>
+                <li><a href="#view-functions" style="color: #ffc107;">View функции</a></li>
+                <li><a href="#security" style="color: #ffc107;">Сигурност</a></li>
+            </ol>
+        </div>
+
+        <!-- BASIC INFO -->
+        <div class="doc-section" id="basic-info">
+            <h2>1. Основна информация</h2>
+            
+            <table>
+                <tr>
+                    <th>Параметър</th>
+                    <th>Стойност</th>
+                </tr>
+                <tr>
+                    <td>Име</td>
+                    <td>KCY-meme-1</td>
+                </tr>
+                <tr>
+                    <td>Символ</td>
+                    <td>KCY1</td>
+                </tr>
+                <tr>
+                    <td>Decimals</td>
+                    <td>18</td>
+                </tr>
+                <tr>
+                    <td>Total Supply</td>
+                    <td>1,000,000 токена (фиксирано)</td>
+                </tr>
+                <tr>
+                    <td>Solidity версия</td>
+                    <td>0.8.20</td>
+                </tr>
+                <tr>
+                    <td>Blockchain</td>
+                    <td>BNB Smart Chain (BSC)</td>
+                </tr>
+            </table>
+
+            <h3>Характеристики:</h3>
+            <ul>
+                <li>✅ <strong>AntiWhale защита</strong> - Ограничения срещу големи купувачи</li>
+                <li>✅ <strong>AntiBot</strong> - Cooldown система срещу ботове</li>
+                <li>✅ <strong>Ниски такси</strong> - Само 0.08% (под 1%!)</li>
+                <li>✅ <strong>Burn механизъм</strong> - 0.03% от транзакциите се изгаря</li>
+                <li>✅ <strong>Exempt система</strong> - 4 слота за team/marketing без ограничения</li>
+                <li>✅ <strong>Контролирана ликвидност</strong> - Само exempt могат да добавят/махат</li>
+            </ul>
+        </div>
+
+        <!-- DISTRIBUTION -->
+        <div class="doc-section" id="distribution">
+            <h2>2. Начално разпределение</h2>
+
+            <h3>При Deployment (автоматично):</h3>
+            
+            <div class="info-box">
+                <strong>Mainnet (Chain ID 56):</strong>
+                <ul>
+                    <li>600,000 токена → DEV_WALLET (0x567c...60c7)</li>
+                    <li>400,000 токена → Контракта (за циркулация)</li>
+                </ul>
+            </div>
+
+            <div class="warning-box">
+                <strong>Testnet (Chain ID 97):</strong>
+                <ul>
+                    <li>600,000 токена → Owner адрес (за тестване)</li>
+                    <li>400,000 токена → Контракта</li>
+                </ul>
+            </div>
+
+            <h3>След <code>distributeInitialAllocations()</code>:</h3>
+
+            <p>От DEV_WALLET се разпределят <strong>500,000 токена</strong>:</p>
+
+            <table>
+                <tr>
+                    <th>Wallet</th>
+                    <th>Сума</th>
+                    <th>Адрес (Mainnet)</th>
+                </tr>
+                <tr>
+                    <td>Marketing</td>
+                    <td>150,000</td>
+                    <td>0x58ec...AE28A</td>
+                </tr>
+                <tr>
+                    <td>Team</td>
+                    <td>200,000</td>
+                    <td>0x6300...fddd</td>
+                </tr>
+                <tr>
+                    <td>Advisor</td>
+                    <td>150,000</td>
+                    <td>0x8d95...8b87</td>
+                </tr>
+                <tr>
+                    <td><strong>DEV остават</strong></td>
+                    <td><strong>100,000</strong></td>
+                    <td>0x567c...60c7</td>
+                </tr>
+            </table>
+
+            <div class="code-block">
+// Owner извиква веднъж
+distributeInitialAllocations()
+
+// ✅ Разпределение завършено
+// ❌ НЕ може да се извика втори път
+            </div>
+        </div>
+
+        <!-- EXEMPT SYSTEM -->
+        <div class="doc-section" id="exempt-system">
+            <h2>3. Exempt система (без ограничения)</h2>
+
+            <p>Контрактът има <strong>8 exempt адреса</strong> общо:</p>
+
+            <h3>Винаги exempt (не могат да се променят):</h3>
+            <ol>
+                <li><strong>Owner</strong> - създателят на контракта (<code>msg.sender</code> при deployment)</li>
+                <li><strong>Контрактът</strong> - адресът на токена</li>
+            </ol>
+
+            <h3>4 конфигурируеми exempt слота:</h3>
+            <ol start="3">
+                <li><strong>exemptAddress1</strong> (eAddr1)</li>
+                <li><strong>exemptAddress2</strong> (eAddr2)</li>
+                <li><strong>exemptAddress3</strong> (eAddr3)</li>
+                <li><strong>exemptAddress4</strong> (eAddr4)</li>
+            </ol>
+
+            <div class="code-block">
+// Owner конфигурира 4-те слота
+updateExemptSlots([addr1, addr2, addr3, addr4])
+
+// След това може да заключи ЗАВИНАГИ
+lockExemptSlotsForever()
+
+// ❌ След lock НЕ могат да се променят
+            </div>
+
+            <h3>DEX адреси (винаги променяеми):</h3>
+            <ol start="7">
+                <li><strong>PancakeSwap Router</strong></li>
+                <li><strong>PancakeSwap Factory</strong></li>
+            </ol>
+
+            <div class="info-box">
+                <strong>Важно:</strong> Router и Factory ВИНАГИ могат да се актуализират, дори след заключване на exempt слотовете!
+            </div>
+
+            <div class="code-block">
+// Owner може да смени Router/Factory по всяко време
+updateDEXAddresses(newRouter, newFactory)
+
+// ✅ Работи дори след lockExemptSlotsForever()
+            </div>
+
+            <h3>Mainnet DEX адреси:</h3>
+            <table>
+                <tr>
+                    <th>Компонент</th>
+                    <th>Адрес</th>
+                </tr>
+                <tr>
+                    <td>PancakeSwap Router</td>
+                    <td><code>0x10ED43C718714eb63d5aA57B78B54704E256024E</code></td>
+                </tr>
+                <tr>
+                    <td>PancakeSwap Factory</td>
+                    <td><code>0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73</code></td>
+                </tr>
+            </table>
+
+            <h3>Testnet DEX адреси:</h3>
+            <table>
+                <tr>
+                    <th>Компонент</th>
+                    <th>Адрес</th>
+                </tr>
+                <tr>
+                    <td>PancakeSwap Router</td>
+                    <td><code>0xD99D1c33F9fC3444f8101754aBC46c52416550D1</code></td>
+                </tr>
+                <tr>
+                    <td>PancakeSwap Factory</td>
+                    <td><code>0x6725F303b657a9451d8BA641348b6761A6CC7a17</code></td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- FEES -->
+        <div class="doc-section" id="fees">
+            <h2>4. Такси: 0.08% (много ниски!)</h2>
+
+            <h3>Структура:</h3>
+            <table>
+                <tr>
+                    <th>Такса</th>
+                    <th>Процент</th>
+                    <th>Към къде</th>
+                </tr>
+                <tr>
+                    <td>Burn</td>
+                    <td>0.03%</td>
+                    <td>Изгаряне (намалява totalSupply)</td>
+                </tr>
+                <tr>
+                    <td>Owner</td>
+                    <td>0.05%</td>
+                    <td>Owner адрес</td>
+                </tr>
+                <tr>
+                    <td><strong>Общо</strong></td>
+                    <td><strong>0.08%</strong></td>
+                    <td>-</td>
+                </tr>
+            </table>
+
+            <h3>Формула:</h3>
+            <div class="code-block">
+FEE_DENOMINATOR = 100,000
+BURN_FEE = 30        // 30/100,000 = 0.03%
+OWNER_FEE = 50       // 50/100,000 = 0.05%
+
+burnAmount = (amount * 30) / 100,000
+ownerAmount = (amount * 50) / 100,000
+transferAmount = amount - burnAmount - ownerAmount
+            </div>
+
+            <h3>Пример с 1000 токена:</h3>
+            <div class="success-box">
+                <strong>Транзакция: 1000 KCY1</strong>
+                <ul>
+                    <li>Burn: 0.3 токена (унищожени)</li>
+                    <li>Owner: 0.5 токена</li>
+                    <li><strong>Получател: 999.2 токена</strong></li>
+                </ul>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ Кога се прилагат таксите:</strong>
+                <ul>
+                    <li>✅ Когато поне ЕДНА страна е normal потребител</li>
+                    <li>❌ НЕ се прилагат когато И ДВЕТЕ страни са exempt</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- TRANSACTION RULES -->
+        <div class="doc-section" id="transaction-rules">
+            <h2>5. Правила за транзакции (3 сценария)</h2>
+
+            <h3>✅ СЦЕНАРИЙ 1: Exempt ↔ Exempt</h3>
+            <p><strong>Когато И ДВЕТЕ страни са exempt:</strong></p>
+            <table>
+                <tr>
+                    <th>Параметър</th>
+                    <th>Стойност</th>
+                </tr>
+                <tr>
+                    <td>Такси</td>
+                    <td>0% (БЕЗ такси)</td>
+                </tr>
+                <tr>
+                    <td>Макс сума</td>
+                    <td>♾️ Няма лимит</td>
+                </tr>
+                <tr>
+                    <td>Cooldown</td>
+                    <td>♾️ Няма</td>
+                </tr>
+                <tr>
+                    <td>Wallet лимит</td>
+                    <td>♾️ Няма</td>
+                </tr>
+            </table>
+
+            <div class="info-box">
+                <strong>Примери:</strong>
+                <ul>
+                    <li>Exempt slot 1 → Exempt slot 2</li>
+                    <li>Exempt → Router (добавяне ликвидност)</li>
+                    <li>Router → Exempt (премахване ликвидност)</li>
+                    <li>Owner → Exempt slot</li>
+                </ul>
+            </div>
+
+            <h3>⚠️ СЦЕНАРИЙ 2: Exempt Slot (1-4) → Normal потребител</h3>
+            <p><strong>Специални ограничения за 4-те exempt слота:</strong></p>
+            <table>
+                <tr>
+                    <th>Параметър</th>
+                    <th>Стойност</th>
+                </tr>
+                <tr>
+                    <td>Такси</td>
+                    <td>0.08% (3% burn + 5% owner)</td>
+                </tr>
+                <tr>
+                    <td>Макс сума</td>
+                    <td><strong>100 токена</strong></td>
+                </tr>
+                <tr>
+                    <td>Cooldown</td>
+                    <td><strong>24 часа</strong></td>
+                </tr>
+                <tr>
+                    <td>Wallet лимит</td>
+                    <td>20,000 (за получателя)</td>
+                </tr>
+            </table>
+
+            <div class="warning-box">
+                <strong>⚠️ Важно:</strong>
+                <ul>
+                    <li>Това правило важи САМО за 4-те exempt слота (eAddr1-4)</li>
+                    <li>НЕ важи за Router/Factory</li>
+                    <li>НЕ важи за Owner/Контракта</li>
+                </ul>
+            </div>
+
+            <h3>🔴 СЦЕНАРИЙ 3: Всички останали случаи с Normal</h3>
+            <p><strong>Когато поне ЕДНА страна е normal потребител:</strong></p>
+            <table>
+                <tr>
+                    <th>Параметър</th>
+                    <th>Стойност</th>
+                </tr>
+                <tr>
+                    <td>Такси</td>
+                    <td>0.08% (3% burn + 5% owner)</td>
+                </tr>
+                <tr>
+                    <td>Макс сума</td>
+                    <td><strong>1,000 токена</strong></td>
+                </tr>
+                <tr>
+                    <td>Cooldown</td>
+                    <td><strong>2 часа</strong> (само за normal sender)</td>
+                </tr>
+                <tr>
+                    <td>Wallet лимит</td>
+                    <td><strong>20,000 токена</strong> (за normal получател)</td>
+                </tr>
+            </table>
+
+            <div class="info-box">
+                <strong>Примери:</strong>
+                <ul>
+                    <li>Normal → Normal</li>
+                    <li>Normal → Router (продажба)</li>
+                    <li>Router → Normal (покупка) - БЕЗ cooldown за Router</li>
+                    <li>Normal → Exempt slot</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- TRADING LOCK -->
+        <div class="doc-section" id="trading-lock">
+            <h2>6. Trading Lock (48 часа)</h2>
+
+            <h3>За Normal потребители:</h3>
+            <div class="warning-box">
+                <ul>
+                    <li>❌ <strong>48 часа след deployment</strong> - НЕ могат да търгуват</li>
+                    <li>✅ След изтичане - пълна свобода (в рамките на лимитите)</li>
+                </ul>
+            </div>
+
+            <h3>За Exempt адреси:</h3>
+            <div class="success-box">
+                <ul>
+                    <li>✅ <strong>Могат веднага</strong> след deployment</li>
+                    <li>✅ Bypass на trading lock</li>
+                </ul>
+            </div>
+
+            <div class="code-block">
+// Проверка дали trading е активен
+bool enabled = isTradingEnabled();
+
+// Колко време остава (в секунди)
+uint256 remaining = timeUntilTradingEnabled();
+
+// Trading се активира автоматично след 48ч
+// tradingEnabledTime = deploymentTime + 48 hours
+            </div>
+        </div>
+
+        <!-- COOLDOWN -->
+        <div class="doc-section" id="cooldown">
+            <h2>7. Cooldown система (2 типа)</h2>
+
+            <h3>1. Normal user cooldown (2 часа):</h3>
+            <div class="code-block">
+COOLDOWN_PERIOD = 2 hours
+
+mapping(address => uint256) public lastTransactionTime;
+            </div>
+
+            <ul>
+                <li>Записва се при всяка normal user транзакция</li>
+                <li>Проверка: <code>block.timestamp >= lastTx + 2 hours</code></li>
+                <li>Прилага се само когато <strong>normal изпраща</strong></li>
+            </ul>
+
+            <h3>2. Exempt slot→Normal cooldown (24 часа):</h3>
+            <div class="code-block">
+EXEMPT_TO_NORMAL_COOLDOWN = 24 hours
+
+mapping(address => uint256) public lastExemptToNormalTime;
+            </div>
+
+            <ul>
+                <li>Записва се само при exempt slot (1-4) → normal</li>
+                <li>Проверка: <code>block.timestamp >= lastExemptTx + 24 hours</code></li>
+                <li>НЕ се прилага за Router/Factory/Owner</li>
+            </ul>
+
+            <h3>Exempt↔Exempt:</h3>
+            <div class="success-box">
+                <strong>✅ БЕЗ cooldown</strong> (не се записва нищо)
+            </div>
+        </div>
+
+        <!-- LIQUIDITY -->
+        <div class="doc-section" id="liquidity">
+            <h2>8. Liquidity Pair управление</h2>
+
+            <h3>Идея:</h3>
+            <ul>
+                <li>❌ Normal users НЕ могат да добавят/премахват ликвидност директно</li>
+                <li>✅ Normal users МОГАТ да купуват/продават през Router</li>
+                <li>✅ Exempt addresses могат всичко</li>
+            </ul>
+
+            <h3>Blocking логика:</h3>
+            <div class="code-block">
+// Блокира добавяне на ликвидност
+if (!fromExempt && isLiquidityPair[to]) {
+    revert("Normal users cannot add liquidity directly");
+}
+
+// Блокира премахване на ликвидност
+if (!toExempt && isLiquidityPair[from] && msg.sender != Router) {
+    revert("Normal users cannot remove liquidity directly");
+}
+            </div>
+
+            <h3>Управление на Pair адреси (Owner функции):</h3>
+
+            <h4>Стъпка 1: Прочети Pair адреса</h4>
+            <div class="code-block">
+// VIEW функция - не модифицира контракта
+getLiquidityPairAddress(WBNB_address)
+// Връща: Pair адреса от Factory
+// Връща: address(0) ако pair не съществува
+            </div>
+
+            <h4>Стъпка 2: Добави ръчно Pair адреса</h4>
+            <div class="code-block">
+// За един pair
+setLiquidityPair(pair_address, true)
+
+// За множество pairs
+setLiquidityPairBatch([pair1, pair2, pair3], true)
+            </div>
+
+            <h4>Стъпка 3: Заключи завинаги</h4>
+            <div class="code-block">
+lockLiquidityPairsForever()
+
+// ❌ След това НЕ могат да се добавят/махат pairs
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ Важно:</strong>
+                <ul>
+                    <li>Ликвидността трябва да е добавена ПРЕДИ да извикаш функцията</li>
+                    <li>Pair адресите са постоянни за всяка двойка токени</li>
+                    <li>Един trading pair = Един постоянен Pair адрес</li>
+                </ul>
+            </div>
+
+            <h3>Примери на Pair адреси:</h3>
+            <table>
+                <tr>
+                    <th>Trading Pair</th>
+                    <th>Адрес</th>
+                </tr>
+                <tr>
+                    <td>KCY1/WBNB</td>
+                    <td>Различен за всеки токен</td>
+                </tr>
+                <tr>
+                    <td>KCY1/USDT</td>
+                    <td>Различен Pair адрес</td>
+                </tr>
+                <tr>
+                    <td>KCY1/BUSD</td>
+                    <td>Различен Pair адрес</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- PAUSE -->
+        <div class="doc-section" id="pause">
+            <h2>9. Pause механизъм</h2>
+
+            <h3>Активиране (само Owner):</h3>
+            <div class="code-block">
+pause()
+
+// Спира контракта за 48 часа
+PAUSE_DURATION = 48 hours
+            </div>
+
+            <h3>Ефект:</h3>
+            <table>
+                <tr>
+                    <th>Тип адрес</th>
+                    <th>Може ли да прави транзакции?</th>
+                </tr>
+                <tr>
+                    <td>Normal users</td>
+                    <td>❌ НЕ</td>
+                </tr>
+                <tr>
+                    <td>Exempt addresses</td>
+                    <td>✅ ДА (игнорират pause)</td>
+                </tr>
+            </table>
+
+            <h3>Проверки:</h3>
+            <div class="code-block">
+// Дали е на пауза
+bool paused = isPaused();
+
+// Колко време остава (в секунди)
+uint256 remaining = timeUntilUnpaused();
+
+// Пауза може да се активира многократно
+// Всеки път: +48 часа от момента на извикване
+            </div>
+        </div>
+
+        <!-- BLACKLIST -->
+        <div
