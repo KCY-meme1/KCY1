@@ -33,8 +33,8 @@ pragma solidity ^0.8.20;
  *        - Liquidity Pairs: CAN be locked forever
  * 
  *      DEPLOYMENT:
- *        - Testnet (chainid 97): YOUR testnet wallets + Testnet Router/Factory
- *        - Mainnet (chainid 56): Real mainnet wallets + Mainnet Router/Factory
+ *        - Testnet (chainid 97): Your testnet wallets + Testnet Router/Factory
+ *        - Mainnet (chainid 56): Real wallets + Mainnet Router/Factory
  * 
  * @author Production Version - v24
  */
@@ -167,10 +167,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         
         if (block.chainid == 97) {
             isTestnet = true;
-            DEVw_mv = 0xYOUR_TESTNET_DEV_WALLET;
-            Mw_tng = 0xYOUR_TESTNET_MARKETING_WALLET;
-            Tw_trz_hdn = 0xYOUR_TESTNET_TEAM_WALLET;
-            Aw_trzV = 0xYOUR_TESTNET_ADVISOR_WALLET;
+            DEVw_mv = 0xCBfA2d3612b7474fF89c0746Ea6bAEee06A61702;
+            Mw_tng = 0x67eDbe18Ad6AB1ff0D57CCc511F56485EfFcabE7;
+            Tw_trz_hdn = 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6;
+            Aw_trzV = 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6;
             pncswpRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
             pncswpFactory = 0x6725F303b657a9451d8BA641348b6761A6CC7a17;
         } else {

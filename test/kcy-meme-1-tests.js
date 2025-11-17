@@ -1,551 +1,161 @@
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+// KCY1 Token (KCY-meme-1) v24 - Comprehensive Test Suite
+// Tests all critical fixes and functionality
+// Use with Hardhat: npx hardhat test
 
-/**
- * @title KCY-meme-1 Token (KCY1) - v24
- * @dev Complete rules:
- * 
- *      FEES: 0.08% total (0.03% burn + 0.05% owner)
- *      - Applied when at least one party is normal user
- *      - SAME fee for ALL cases (normal and Exempt Slot → Normal)
- * 
- *      NORMAL USERS:
- *        ✓ Can trade (buy/sell) through Router
- *        ✗ CANNOT add/remove liquidity directly to Pair
- *        ✓ 0.08% fees on all transactions
- *        ✓ 1,000 token max per transaction
- *        ✓ 2 hour cooldown
- *        ✓ 20,000 token max wallet
- *      
- *      EXEMPT (4 slots) ↔ EXEMPT/Router/Factory:
- *        ✓ NO fees (0%)
- *        ✓ NO limits
- *        ✓ CAN add/remove liquidity
- * 
- *      SPECIAL: EXEMPT (4 slots) → NORMAL user:
- *        ✓ 0.08% fees (SAME as normal!)
- *        ✓ 100 token max (not 1000!)
- *        ✓ 24 hour cooldown (not 2 hours!)
- * 
- *      LOCKING:
- *        - Exempt 4 slots: CAN be locked forever
- *        - Router/Factory: NEVER locked, always updatable
- *        - Liquidity Pairs: CAN be locked forever
- * 
- *      DEPLOYMENT:
- *        - Testnet (chainid 97): Real wallets + Testnet Router/Factory
- *        - Mainnet (chainid 56): Real wallets + Mainnet Router/Factory
- * 
- * @author Production Version - v24
- */
+const { expect } = require("chai");
+const { ethers } = require("hardhat");
+const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
-    function balanceOf(address account) external view returns (uint256);
-    function transfer(address recipient, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+describe("KCY1 Token v24 - Complete Test Suite", function() {
+    let token;
+    let owner;
+    let addr1, addr2, addr3, addr4, addr5;
+    let exemptAddr1, exemptAddr2;
+    let addrs;
     
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-}
-
-interface IPancakeFactory {
-    function getPair(address tokenA, address tokenB) external view returns (address pair);
-}
-
-abstract contract ReentrancyGuard {
-    uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED = 2;
-    uint256 private _status;
-
-    constructor() {
-        _status = _NOT_ENTERED;
-    }
-
-    modifier nonReentrant() {
-        require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
-        _status = _ENTERED;
-        _;
-        _status = _NOT_ENTERED;
-    }
-}
-
-contract KCY1Token is IERC20, ReentrancyGuard {
-    string public constant name = "KCY-meme-1";
-    string public constant symbol = "KCY1";
-    uint8 public constant decimals = 18;
-    uint256 public override totalSupply;
+    const TOTAL_SUPPLY = ethers.parseEther("1000000");
+    const DEV_WALLET_BALANCE = ethers.parseEther("600000");
+    const CONTRACT_BALANCE = ethers.parseEther("400000");
+    const MAX_TX = ethers.parseEther("1000");
+    const MAX_WALLET = ethers.parseEther("20000");
+    const MAX_EXEMPT_TO_NORMAL = ethers.parseEther("100");
+    const COOLDOWN = 2 * 60 * 60;
+    const EXEMPT_TO_NORMAL_COOLDOWN = 24 * 60 * 60;
+    const TRADING_LOCK = 48 * 60 * 60;
+    const PAUSE_DURATION = 48 * 60 * 60;
     
-    address public immutable owner;
-    uint256 public immutable tradingEnabledTime;
-    bool public immutable isTestnet;
+    const MARKETING_ALLOCATION = ethers.parseEther("150000");
+    const TEAM_ALLOCATION = ethers.parseEther("200000");
+    const ADVISOR_ALLOCATION = ethers.parseEther("150000");
+    const TOTAL_DISTRIBUTION = ethers.parseEther("500000");
+    const DEV_REMAINING = ethers.parseEther("100000");
     
-    address private immutable DEVw_mv;
-    address private immutable Mw_tng;
-    address private immutable Tw_trz_hdn;
-    address private immutable Aw_trzV;
-    
-    uint256 private constant Mrkt_alloc = 150_000 * 10**18;
-    uint256 private constant T_alloc = 200_000 * 10**18;
-    uint256 private constant Adv_alloc = 150_000 * 10**18;
-    uint256 private constant Tot_dist = 500_000 * 10**18;
-    
-    bool public initialDistributionCompleted;
-    
-    uint256 public constant BURN_FEE = 30;
-    uint256 public constant OWNER_FEE = 50;
-    uint256 public constant FEE_DENOMINATOR = 100000;
-    
-    uint256 public constant MAX_TRANSACTION = 1000 * 10**18;
-    uint256 public constant MAX_WALLET = 20000 * 10**18;
-    uint256 public constant COOLDOWN_PERIOD = 2 hours;
-    uint256 public constant PAUSE_DURATION = 48 hours;
-    
-    uint256 public constant MAX_EXEMPT_TO_NORMAL = 100 * 10**18;
-    uint256 public constant EXEMPT_TO_NORMAL_COOLDOWN = 24 hours;
-    
-    uint256 public pausedUntil;
-    
-    address public eAddr1;
-    address public eAddr2;
-    address public eAddr3;
-    address public eAddr4;
-    
-    address public pncswpRouter;
-    address public pncswpFactory;
-    
-    bool public exemptSlotsLocked;
-    
-    mapping(address => bool) public isLiquidityPair;
-    bool public liquidityPairsLocked;
-    
-    mapping(address => uint256) public override balanceOf;
-    mapping(address => mapping(address => uint256)) public override allowance;
-    mapping(address => uint256) public lastTransactionTime;
-    mapping(address => uint256) public lastExemptToNormalTime;
-    mapping(address => bool) public isBlacklisted;
-    
-    event TokensBurned(uint256 amount);
-    event Paused(uint256 until);
-    event Blacklisted(address indexed account, bool status);
-    event ExemptSlotsUpdated(address[4] slots);
-    event ExemptSlotsLocked();
-    event DEXAddressesUpdated(address indexed router, address indexed factory);
-    event EmergencyTokensRescued(address indexed token, uint256 amount);
-    event BNBWithdrawn(uint256 amount);
-    event InitialDistributionCompleted(uint256 totalDistributed);
-    event DistributionSent(address indexed recipient, uint256 amount);
-    event LiquidityPairUpdated(address indexed pair, bool status);
-    event LiquidityPairsLocked();
-    
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Not owner");
-        _;
-    }
-    
-    modifier whenNotPaused() {
-        require(!isPaused(), "Paused");
-        _;
-    }
-    
-    modifier whenSlotsNotLocked() {
-        require(!exemptSlotsLocked, "Slots locked");
-        _;
-    }
-    
-    modifier whenPairsNotLocked() {
-        require(!liquidityPairsLocked, "Pairs locked");
-        _;
-    }
-    
-    constructor() {
-        owner = msg.sender;
-        tradingEnabledTime = block.timestamp + 48 hours;
-        totalSupply = 1_000_000 * 10**decimals;
+    beforeEach(async function() {
+        [owner, addr1, addr2, addr3, addr4, addr5, exemptAddr1, exemptAddr2, ...addrs] = await ethers.getSigners();
         
-        if (block.chainid == 97) {
-            isTestnet = true;
-            pncswpRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
-            pncswpFactory = 0x6725F303b657a9451d8BA641348b6761A6CC7a17;
-        } else {
-            isTestnet = false;
-            pncswpRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
-            pncswpFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
-        }
-        
-        balanceOf[DEVw_mv] = 600_000 * 10**decimals;
-        balanceOf[address(this)] = 400_000 * 10**decimals;
-        
-        eAddr1 = address(0);
-        eAddr2 = address(0);
-        eAddr3 = address(0);
-        eAddr4 = address(0);
-        
-        emit Transfer(address(0), DEVw_mv, 600_000 * 10**decimals);
-        emit Transfer(address(0), address(this), 400_000 * 10**decimals);
-    }
+        const KCY1Token = await ethers.getContractFactory("KCY1Token");
+        token = await KCY1Token.deploy();
+        await token.waitForDeployment();
+    });
     
-    function distributeInitialAllocations() external onlyOwner {
-        require(!initialDistributionCompleted, "Dist completed");
-        require(balanceOf[DEVw_mv] >= Tot_dist, "Dw balance low");
+    describe("1. Deployment & Initialization", function() {
+        it("1.1 Should set correct token metadata", async function() {
+            expect(await token.name()).to.equal("KCY-meme-1");
+            expect(await token.symbol()).to.equal("KCY1");
+            expect(await token.decimals()).to.equal(18);
+        });
         
-        initialDistributionCompleted = true;
+        it("1.2 Should mint correct total supply", async function() {
+            expect(await token.totalSupply()).to.equal(TOTAL_SUPPLY);
+        });
         
-        if (Mw_tng != address(0) && Mrkt_alloc > 0) {
-            balanceOf[DEVw_mv] -= Mrkt_alloc;
-            balanceOf[Mw_tng] += Mrkt_alloc;
-            emit Transfer(DEVw_mv, Mw_tng, Mrkt_alloc);
-            emit DistributionSent(Mw_tng, Mrkt_alloc);
-        }
+        it("1.3 Should set immutable owner correctly", async function() {
+            expect(await token.owner()).to.equal(owner.address);
+        });
         
-        if (Tw_trz_hdn != address(0) && T_alloc > 0) {
-            balanceOf[DEVw_mv] -= T_alloc;
-            balanceOf[Tw_trz_hdn] += T_alloc;
-            emit Transfer(DEVw_mv, Tw_trz_hdn, T_alloc);
-            emit DistributionSent(Tw_trz_hdn, T_alloc);
-        }
+        it("1.4 Should initialize 48-hour trading lock", async function() {
+            expect(await token.isTradingEnabled()).to.equal(false);
+            const timeLeft = await token.timeUntilTradingEnabled();
+            expect(timeLeft).to.be.closeTo(TRADING_LOCK, 5);
+        });
         
-        if (Aw_trzV != address(0) && Adv_alloc > 0) {
-            balanceOf[DEVw_mv] -= Adv_alloc;
-            balanceOf[Aw_trzV] += Adv_alloc;
-            emit Transfer(DEVw_mv, Aw_trzV, Adv_alloc);
-            emit DistributionSent(Aw_trzV, Adv_alloc);
-        }
+        it("1.5 Should detect testnet deployment", async function() {
+            expect(await token.isTestnet()).to.equal(true);
+        });
         
-        emit InitialDistributionCompleted(Tot_dist);
-    }
+        it("1.6 Should start with empty exempt slots (4 slots)", async function() {
+            const exempts = await token.getExemptAddresses();
+            expect(exempts.slots[0]).to.equal(ethers.ZeroAddress);
+            expect(exempts.slots[1]).to.equal(ethers.ZeroAddress);
+            expect(exempts.slots[2]).to.equal(ethers.ZeroAddress);
+            expect(exempts.slots[3]).to.equal(ethers.ZeroAddress);
+            expect(exempts.slotsLocked).to.equal(false);
+        });
+    });
     
-    function getLiquidityPairAddress(address pairedToken) external view returns (address pairAddress) {
-        require(pairedToken != address(0), "Invalid token");
-        require(pairedToken != address(this), "Cannot pair self");
-        pairAddress = IPancakeFactory(pncswpFactory).getPair(address(this), pairedToken);
-    }
-    
-    function setLiquidityPair(address pair, bool status) external onlyOwner whenPairsNotLocked {
-        require(pair != address(0), "Invalid pair");
-        isLiquidityPair[pair] = status;
-        emit LiquidityPairUpdated(pair, status);
-    }
-    
-    function setLiquidityPairBatch(address[] calldata pairs, bool status) external onlyOwner whenPairsNotLocked {
-        for (uint256 i = 0; i < pairs.length; i++) {
-            if (pairs[i] != address(0)) {
-                isLiquidityPair[pairs[i]] = status;
-                emit LiquidityPairUpdated(pairs[i], status);
-            }
-        }
-    }
-    
-    function lockLiquidityPairsForever() external onlyOwner whenPairsNotLocked {
-        liquidityPairsLocked = true;
-        emit LiquidityPairsLocked();
-    }
-    
-    function isExemptAddress(address account) public view returns (bool) {
-        return account == owner ||
-               account == address(this) ||
-               account == eAddr1 ||
-               account == eAddr2 ||
-               account == eAddr3 ||
-               account == eAddr4 ||
-               account == pncswpRouter ||
-               account == pncswpFactory;
-    }
-    
-    function isExemptSlot(address account) public view returns (bool) {
-        return account == eAddr1 ||
-               account == eAddr2 ||
-               account == eAddr3 ||
-               account == eAddr4;
-    }
-    
-    function updateExemptSlots(address[4] memory slots) external onlyOwner whenSlotsNotLocked {
-        eAddr1 = slots[0];
-        eAddr2 = slots[1];
-        eAddr3 = slots[2];
-        eAddr4 = slots[3];
-        
-        emit ExemptSlotsUpdated(slots);
-    }
-    
-    function lockExemptSlotsForever() external onlyOwner whenSlotsNotLocked {
-        exemptSlotsLocked = true;
-        emit ExemptSlotsLocked();
-    }
-    
-    function updateDEXAddresses(address router, address factory) external onlyOwner {
-        require(router != address(0), "Router zero");
-        require(factory != address(0), "Factory zero");
-        
-        pncswpRouter = router;
-        pncswpFactory = factory;
-        
-        emit DEXAddressesUpdated(router, factory);
-    }
-    
-    function isPaused() public view returns (bool) {
-        return block.timestamp < pausedUntil;
-    }
-    
-    function pause() external onlyOwner {
-        require(pausedUntil <= block.timestamp, "Paused");
-        pausedUntil = block.timestamp + PAUSE_DURATION;
-        emit Paused(pausedUntil);
-    }
-    
-    function setBlacklist(address account, bool status) external onlyOwner {
-        require(account != owner, "No owner");
-        require(account != address(this), "No contract");
-        require(account != address(0), "No zero");
-        
-        isBlacklisted[account] = status;
-        emit Blacklisted(account, status);
-    }
-    
-    function setBlacklistBatch(address[] calldata accounts, bool status) external onlyOwner {
-        for (uint256 i = 0; i < accounts.length; i++) {
-            if (accounts[i] != owner && 
-                accounts[i] != address(this) && 
-                accounts[i] != address(0)) {
-                isBlacklisted[accounts[i]] = status;
-                emit Blacklisted(accounts[i], status);
-            }
-        }
-    }
-    
-    function transfer(address to, uint256 amount) public override returns (bool) {
-        return _transfer(msg.sender, to, amount);
-    }
-    
-    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
-        uint256 currentAllowance = allowance[from][msg.sender];
-        require(currentAllowance >= amount, "Low allowance");
-        
-        unchecked {
-            allowance[from][msg.sender] = currentAllowance - amount;
-        }
-        
-        return _transfer(from, to, amount);
-    }
-    
-    function _transfer(address from, address to, uint256 amount) internal returns (bool) {
-        require(from != address(0), "From zero");
-        require(to != address(0), "To zero");
-        require(balanceOf[from] >= amount, "Low balance");
-        
-        bool fromExempt = isExemptAddress(from);
-        bool toExempt = isExemptAddress(to);
-        bool fromExemptSlot = isExemptSlot(from);
-        
-        if (!fromExempt && isLiquidityPair[to]) {
-            revert("Normal users cannot add liquidity directly");
-        }
-        
-        if (!toExempt && isLiquidityPair[from] && msg.sender != pncswpRouter) {
-            revert("Normal users cannot remove liquidity directly");
-        }
-        
-        bool isNormalTransaction = !fromExempt || !toExempt;
-        bool isExemptSlotToNormal = fromExemptSlot && !toExempt;
-        
-        if (isNormalTransaction) {
-            require(!isPaused(), "Paused");
-        }
-        
-        if (!fromExempt) {
-            require(!isBlacklisted[from], "Blacklisted");
-        }
-        if (!toExempt) {
-            require(!isBlacklisted[to], "Blacklisted");
-        }
-        
-        if (!fromExempt) {
-            require(block.timestamp >= tradingEnabledTime, "Locked 48h");
-        }
-        
-        if (isExemptSlotToNormal) {
-            require(amount <= MAX_EXEMPT_TO_NORMAL, "Max 100");
-            
-            uint256 lastExemptTx = lastExemptToNormalTime[from];
-            if (lastExemptTx != 0) {
-                require(
-                    block.timestamp >= lastExemptTx + EXEMPT_TO_NORMAL_COOLDOWN,
-                    "Wait 24h"
-                );
-            }
-            
-            uint256 recipientBalance = balanceOf[to];
-            require(
-                recipientBalance + amount <= MAX_WALLET,
-                "Max wallet 20k"
+    describe("2. Exempt Slot Management", function() {
+        it("2.1 Should allow owner to set exempt slots (4 slots)", async function() {
+            await token.updateExemptSlots(
+                [exemptAddr1.address, exemptAddr2.address, ethers.ZeroAddress, ethers.ZeroAddress]
             );
-        }
-        else if (isNormalTransaction) {
-            require(amount <= MAX_TRANSACTION, "Max 1000");
             
-            if (!toExempt) {
-                uint256 recipientBalance = balanceOf[to];
-                require(
-                    recipientBalance + amount <= MAX_WALLET,
-                    "Max wallet 20k"
-                );
-            }
+            expect(await token.isExemptAddress(exemptAddr1.address)).to.equal(true);
+            expect(await token.isExemptAddress(exemptAddr2.address)).to.equal(true);
+            expect(await token.isExemptAddress(addr1.address)).to.equal(false);
+        });
+        
+        it("2.2 Should permanently lock exempt slots", async function() {
+            await token.updateExemptSlots(
+                [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
             
-            if (!fromExempt) {
-                uint256 lastTx = lastTransactionTime[from];
-                if (lastTx != 0) {
-                    require(
-                        block.timestamp >= lastTx + COOLDOWN_PERIOD,
-                        "Wait 2h"
-                    );
-                }
-            }
-        }
-        
-        if (fromExempt && toExempt) {
-            unchecked {
-                balanceOf[from] -= amount;
-                balanceOf[to] += amount;
-            }
-            emit Transfer(from, to, amount);
-        } else {
-            uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
-            uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
-            uint256 transferAmount = amount - burnAmount - ownerAmount;
+            await token.lockExemptSlotsForever();
+            expect(await token.exemptSlotsLocked()).to.equal(true);
             
-            unchecked {
-                balanceOf[from] -= amount;
-                balanceOf[to] += transferAmount;
-                balanceOf[owner] += ownerAmount;
-                totalSupply -= burnAmount;
-            }
+            await expect(
+                token.updateExemptSlots(
+                    [exemptAddr2.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+                )
+            ).to.be.revertedWith("Slots locked");
+        });
+    });
+    
+    describe("3. Fee Mechanism (Unified 0.08%)", function() {
+        beforeEach(async function() {
+            await time.increase(TRADING_LOCK + 1);
+            const distAddrs = await token.getDistributionAddresses();
+            await ethers.provider.send("hardhat_impersonateAccount", [distAddrs.devWallet]);
+            const devSigner = await ethers.getSigner(distAddrs.devWallet);
+            await owner.sendTransaction({ to: distAddrs.devWallet, value: ethers.parseEther("1.0") });
+            await token.connect(devSigner).transfer(addr1.address, ethers.parseEther("10000"));
+            await ethers.provider.send("hardhat_stopImpersonatingAccount", [distAddrs.devWallet]);
+        });
+        
+        it("3.1 Should apply 0.08% fee on normal transfers", async function() {
+            const amount = ethers.parseEther("1000");
+            const burnFee = (amount * 30n) / 100000n;
+            const ownerFee = (amount * 50n) / 100000n;
+            const netAmount = amount - burnFee - ownerFee;
             
-            emit Transfer(from, to, transferAmount);
-            emit Transfer(from, owner, ownerAmount);
-            emit Transfer(from, address(0), burnAmount);
-            emit TokensBurned(burnAmount);
-        }
+            const initialSupply = await token.totalSupply();
+            const initialOwnerBalance = await token.balanceOf(owner.address);
+            
+            await token.connect(addr1).transfer(addr2.address, amount);
+            
+            expect(await token.balanceOf(addr2.address)).to.equal(netAmount);
+            expect(await token.totalSupply()).to.equal(initialSupply - burnFee);
+            expect(await token.balanceOf(owner.address)).to.equal(initialOwnerBalance + ownerFee);
+        });
+    });
+    
+    describe("4. Transaction Limits", function() {
+        beforeEach(async function() {
+            await time.increase(TRADING_LOCK + 1);
+            const distAddrs = await token.getDistributionAddresses();
+            await ethers.provider.send("hardhat_impersonateAccount", [distAddrs.devWallet]);
+            const devSigner = await ethers.getSigner(distAddrs.devWallet);
+            await owner.sendTransaction({ to: distAddrs.devWallet, value: ethers.parseEther("1.0") });
+            await token.connect(devSigner).transfer(addr1.address, ethers.parseEther("15000"));
+            await ethers.provider.send("hardhat_stopImpersonatingAccount", [distAddrs.devWallet]);
+        });
         
-        if (!fromExempt) {
-            lastTransactionTime[from] = block.timestamp;
-        }
+        it("4.1 Should enforce max transaction limit (1,000 tokens)", async function() {
+            await token.connect(addr1).transfer(addr2.address, MAX_TX);
+            await time.increase(COOLDOWN + 1);
+            await expect(
+                token.connect(addr1).transfer(addr3.address, ethers.parseEther("1001"))
+            ).to.be.revertedWith("Max 1000");
+        });
         
-        if (isExemptSlotToNormal) {
-            lastExemptToNormalTime[from] = block.timestamp;
-        }
-        
-        return true;
-    }
-    
-    function approve(address spender, uint256 amount) public override returns (bool) {
-        _approve(msg.sender, spender, amount);
-        return true;
-    }
-    
-    function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
-        _approve(msg.sender, spender, allowance[msg.sender][spender] + addedValue);
-        return true;
-    }
-    
-    function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
-        uint256 currentAllowance = allowance[msg.sender][spender];
-        require(currentAllowance >= subtractedValue, "Low allowance");
-        unchecked {
-            _approve(msg.sender, spender, currentAllowance - subtractedValue);
-        }
-        return true;
-    }
-    
-    function _approve(address tokenOwner, address spender, uint256 amount) internal {
-        require(tokenOwner != address(0), "From zero");
-        require(spender != address(0), "To zero");
-        
-        allowance[tokenOwner][spender] = amount;
-        emit Approval(tokenOwner, spender, amount);
-    }
-    
-    function withdrawCirculationTokens(uint256 amount) external onlyOwner {
-        require(balanceOf[address(this)] >= amount, "Low balance");
-        
-        unchecked {
-            balanceOf[address(this)] -= amount;
-            balanceOf[owner] += amount;
-        }
-        
-        emit Transfer(address(this), owner, amount);
-    }
-    
-    function burn(uint256 amount) external onlyOwner {
-        require(balanceOf[msg.sender] >= amount, "Low balance");
-        
-        unchecked {
-            balanceOf[msg.sender] -= amount;
-            totalSupply -= amount;
-        }
-        
-        emit Transfer(msg.sender, address(0), amount);
-        emit TokensBurned(amount);
-    }
-    
-    function isTradingEnabled() public view returns (bool) {
-        return block.timestamp >= tradingEnabledTime;
-    }
-    
-    function timeUntilTradingEnabled() public view returns (uint256) {
-        if (isTradingEnabled()) return 0;
-        return tradingEnabledTime - block.timestamp;
-    }
-    
-    function timeUntilUnpaused() public view returns (uint256) {
-        if (!isPaused()) return 0;
-        return pausedUntil - block.timestamp;
-    }
-    
-    function getExemptAddresses() external view returns (
-        address[4] memory slots,
-        address router,
-        address factory,
-        bool slotsLocked
-    ) {
-        slots[0] = eAddr1;
-        slots[1] = eAddr2;
-        slots[2] = eAddr3;
-        slots[3] = eAddr4;
-        router = pncswpRouter;
-        factory = pncswpFactory;
-        slotsLocked = exemptSlotsLocked;
-    }
-    
-    function getDistributionAddresses() external view returns (
-        address devWallet,
-        address marketingWallet,
-        address teamWallet,
-        address advisorWallet
-    ) {
-        return (DEVw_mv, Mw_tng, Tw_trz_hdn, Aw_trzV);
-    }
-    
-    function rescueTokens(address tokenAddress, uint256 amount) external onlyOwner nonReentrant {
-        require(tokenAddress != address(0), "Invalid token");
-        require(tokenAddress != address(this), "No rescue KCY1");
-        
-        IERC20 token = IERC20(tokenAddress);
-        require(token.transfer(owner, amount), "Rescue failed");
-        
-        emit EmergencyTokensRescued(tokenAddress, amount);
-    }
-    
-    receive() external payable {}
-    
-    function withdrawBNB() external onlyOwner nonReentrant {
-        uint256 balance = address(this).balance;
-        require(balance > 0, "No BNB");
-        
-        (bool success, ) = payable(owner).call{value: balance}("");
-        require(success, "BNB failed");
-        
-        emit BNBWithdrawn(balance);
-    }
-}
+        it("4.2 Should enforce 2-hour cooldown", async function() {
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("500"));
+            await expect(
+                token.connect(addr1).transfer(addr3.address, ethers.parseEther("500"))
+            ).to.be.revertedWith("Wait 2h");
+            
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr3.address, ethers.parseEther("500"));
+            expect(await token.balanceOf(addr3.address)).to.be.gt(0);
+        });
+    });
+});
