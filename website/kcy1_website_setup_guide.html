@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KCY1 Website - Ръководство за настройка</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.8;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            color: #764ba2;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+        }
+
+        h3 {
+            color: #667eea;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            border-left: 4px solid #667eea;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        .error {
+            background: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+
+        ul, ol {
+            margin-left: 30px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        .step {
+            background: #f0f0f0;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 5px solid #667eea;
+        }
+
+        .step-number {
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            color: #d63384;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 KCY1 Website - Ръководство за настройка</h1>
+        <p><strong>Дата:</strong> 2025</p>
+        <p><strong>Версия:</strong> 1.0 - Web3 Integrated</p>
+
+        <!-- TABLE OF CONTENTS -->
+        <div class="info">
+            <h3>📋 Съдържание:</h3>
+            <ol>
+                <li><a href="#overview">Общ преглед</a></li>
+                <li><a href="#how-it-works">Как работи интеграцията</a></li>
+                <li><a href="#deployment-steps">Стъпки след deployment</a></li>
+                <li><a href="#configuration">Конфигурация</a></li>
+                <li><a href="#features">Функционалност</a></li>
+                <li><a href="#troubleshooting">Решаване на проблеми</a></li>
+            </ol>
+        </div>
+
+        <!-- OVERVIEW -->
+        <h2 id="overview">1. Общ преглед</h2>
+        
+        <p>KCY1 Website е изцяло интегриран с blockchain чрез Web3/Ethers.js библиотеките. Всички данни се зареждат <strong>директно от smart contract-а</strong>, без нужда от ръчно въвеждане.</p>
+
+        <h3>✅ Какво работи автоматично:</h3>
+        <ul>
+            <li>🕐 <strong>48-часов таймер</strong> - чете <code>tradingEnabledTime</code> от контракта</li>
+            <li>📊 <strong>Статистики</strong> - total supply, burned tokens, circulating supply</li>
+            <li>🚫 <strong>Блоклист</strong> - всички блокирани адреси от contract events</li>
+            <li>💰 <strong>Market cap</strong> - автоматично изчисление</li>
+        </ul>
+
+        <div class="warning">
+            <strong>⚠️ Важно:</strong> Сайтът НЕ работи докато не конфигурираш contract адреса след deployment!
+        </div>
+
+        <!-- HOW IT WORKS -->
+        <h2 id="how-it-works">2. Как работи интеграцията</h2>
+
+        <h3>🔗 Web3 Stack:</h3>
+        <table>
+            <tr>
+                <th>Компонент</th>
+                <th>Версия</th>
+                <th>Предназначение</th>
+            </tr>
+            <tr>
+                <td>Ethers.js</td>
+                <td>5.7.2</td>
+                <td>Комуникация с blockchain</td>
+            </tr>
+            <tr>
+                <td>BSC RPC</td>
+                <td>Mainnet</td>
+                <td>Binance dataseed node</td>
+            </tr>
+            <tr>
+                <td>Contract ABI</td>
+                <td>Minimal</td>
+                <td>Само нужните функции</td>
+            </tr>
+        </table>
+
+        <h3>📡 RPC Endpoint:</h3>
+        <div class="code-block">
+https://bsc-dataseed.binance.org/
+        </div>
+
+        <div class="info">
+            <strong>ℹ️ Информация:</strong> Използваме публичния Binance RPC node. Безплатен е, но има rate limits. За production може да използваш платен RPC (QuickNode, Ankr).
+        </div>
+
+        <h3>🎯 Как се извличат данните:</h3>
+
+        <div class="step">
+            <div class="step-number">Стъпка 1</div>
+            <strong>Инициализация при зареждане на страницата:</strong>
+            <div class="code-block">
+// JavaScript се изпълнява при отваряне
+window.addEventListener('DOMContentLoaded', async () => {
+    await initWeb3();  // Свързва се с BSC
+    updateCountdown(); // Стартира таймера
+});
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">Стъпка 2</div>
+            <strong>Свързване към контракта:</strong>
+            <div class="code-block">
+provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+contract = new ethers.Contract(contractAddress, ABI, provider);
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">Стъпка 3</div>
+            <strong>Извличане на данни:</strong>
+            <div class="code-block">
+// Пример: Total Supply
+const totalSupply = await contract.totalSupply();
+
+// Пример: Trading Enabled Time
+const tradingTime = await contract.tradingEnabledTime();
+
+// Пример: Blacklist Events
+const events = await contract.queryFilter(filter);
+            </div>
+        </div>
+
+        <!-- DEPLOYMENT STEPS -->
+        <h2 id="deployment-steps">3. Стъпки след deployment на токена</h2>
+
+        <div class="step">
+            <div class="step-number">Стъпка 1</div>
+            <h3>Deploy Smart Contract на BSC Mainnet</h3>
+            <ol>
+                <li>Deploy <code>kcy-meme-1.sol</code> на BSC Mainnet</li>
+                <li>Запази contract адреса (например: <code>0xABC123...</code>)</li>
+                <li>Verify contract на BSCScan</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <div class="step-number">Стъпка 2</div>
+            <h3>Отвори index.html файла</h3>
+            <ol>
+                <li>Отвори <code>index.html</code> с текстов редактор (VS Code, Notepad++)</li>
+                <li>Намери секцията <code>CONFIGURATION</code> (около ред 350)</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <div class="step-number">Стъпка 3</div>
+            <h3>Конфигурирай contract адреса</h3>
+            <p><strong>Намери това:</strong></p>
+            <div class="code-block">
+const CONFIG = {
+    contractAddress: '0xYOUR_CONTRACT_ADDRESS_HERE', // ← ПРОМЕНИ ТОВА!
+    rpcUrl: 'https://bsc-dataseed.binance.org/',
+    bscScanUrl: 'https://bscscan.com',
+    pancakeswapUrl: 'https://pancakeswap.finance/swap',
+    chatServerUrl: '',
+    chatAppUrl: '',
+};
+            </div>
+
+            <p><strong>Промени на:</strong></p>
+            <div class="code-block">
+const CONFIG = {
+    contractAddress: '0xABC123YOUR_REAL_CONTRACT_ADDRESS', // ✅ Реален адрес
+    rpcUrl: 'https://bsc-dataseed.binance.org/',
+    bscScanUrl: 'https://bscscan.com',
+    pancakeswapUrl: 'https://pancakeswap.finance/swap',
+    chatServerUrl: '', // По-късно добави
+    chatAppUrl: '',    // По-късно добави
+};
+            </div>
+        </div>
+
+        <div class="step">
+            <div class="step-number">Стъпка 4</div>
+            <h3>Запази и тествай</h3>
+            <ol>
+                <li>Запази файла (<code>Ctrl + S</code>)</li>
+                <li>Отвори <code>index.html</code> в браузър</li>
+                <li>Отвори Developer Console (<code>F12</code>)</li>
+                <li>Виж дали има грешки</li>
+            </ol>
+        </div>
+
+        <div class="success">
+            <strong>✅ Ако всичко работи, ще видиш:</strong>
+            <div class="code-block">
+🚀 Initializing KCY1 Website...
+✅ Web3 initialized successfully
+✅ Connected to blockchain
+            </div>
+        </div>
+
+        <div class="error">
+            <strong>❌ Ако нещо не работи, ще видиш:</strong>
+            <div class="code-block">
+⚠️ Contract address not configured!
+❌ Web3 initialization failed: ...
+            </div>
+        </div>
+
+        <!-- CONFIGURATION -->
+        <h2 id="configuration">4. Конфигурация</h2>
+
+        <h3>🔧 CONFIG обект - Всички настройки:</h3>
+
+        <table>
+            <tr>
+                <th>Параметър</th>
+                <th>Описание</th>
+                <th>Задължителен?</th>
+            </tr>
+            <tr>
+                <td><code>contractAddress</code></td>
+                <td>Адресът на deployed токена</td>
+                <td><strong>✅ ДА</strong></td>
+            </tr>
+            <tr>
+                <td><code>rpcUrl</code></td>
+                <td>BSC RPC endpoint</td>
+                <td>✅ ДА (вече зададен)</td>
+            </tr>
+            <tr>
+                <td><code>bscScanUrl</code></td>
+                <td>BSCScan base URL</td>
+                <td>✅ ДА (вече зададен)</td>
+            </tr>
+            <tr>
+                <td><code>pancakeswapUrl</code></td>
+                <td>PancakeSwap swap URL</td>
+                <td>✅ ДА (вече зададен)</td>
+            </tr>
+            <tr>
+                <td><code>chatServerUrl</code></td>
+                <td>URL към чат сървъра</td>
+                <td>❌ Опционален</td>
+            </tr>
+            <tr>
+                <td><code>chatAppUrl</code></td>
+                <td>URL за mobile app</td>
+                <td>❌ Опционален</td>
+            </tr>
+        </table>
+
+        <h3>📝 Пример с всички попълнени:</h3>
+        <div class="code-block">
+const CONFIG = {
+    contractAddress: '0x1234567890abcdef1234567890abcdef12345678',
+    rpcUrl: 'https://bsc-dataseed.binance.org/',
+    bscScanUrl: 'https://bscscan.com',
+    pancakeswapUrl: 'https://pancakeswap.finance/swap',
+    chatServerUrl: 'https://chat.kcy1.io',
+    chatAppUrl: 'https://app.kcy1.io/download',
+};
+        </div>
+
+        <!-- FEATURES -->
+        <h2 id="features">5. Функционалност (какво показва сайтът)</h2>
+
+        <h3>⏰ 48-часов таймер:</h3>
+        <ul>
+            <li><strong>Преди deployment:</strong> Таймерът е скрит (няма contract)</li>
+            <li><strong>След deployment (първите 48ч):</strong> Показва оставащо време в реално време</li>
+            <li><strong>След 48 часа:</strong> Таймерът автоматично изчезва</li>
+        </ul>
+
+        <div class="info">
+            <strong>Как работи:</strong><br>
+            <code>tradingEnabledTime = deploymentTime + 48 hours</code><br>
+            Чете се директно от <code>contract.tradingEnabledTime()</code>
+        </div>
+
+        <h3>📊 Статистики:</h3>
+        <table>
+            <tr>
+                <th>Показател</th>
+                <th>Откъде се взима</th>
+            </tr>
+            <tr>
+                <td>Market Cap</td>
+                <td>Circulating Supply × Token Price</td>
+            </tr>
+            <tr>
+                <td>Token Price</td>
+                <td>От liquidity pair (requires setup)</td>
+            </tr>
+            <tr>
+                <td>Circulating Supply</td>
+                <td><code>totalSupply - contractBalance</code></td>
+            </tr>
+            <tr>
+                <td>Burned Tokens</td>
+                <td><code>1,000,000 - totalSupply</code></td>
+            </tr>
+            <tr>
+                <td>Liquidity</td>
+                <td>От pair contract (requires setup)</td>
+            </tr>
+            <tr>
+                <td>Holders</td>
+                <td>External API (BSCScan/indexer)</td>
+            </tr>
+        </table>
+
+        <div class="warning">
+            <strong>⚠️ Забележка:</strong> Някои статистики като Holders и 24h Volume изискват external API интеграция, която не е включена в базовата версия.
+        </div>
+
+        <h3>🚫 Блоклист:</h3>
+        <ul>
+            <li>Извлича <strong>всички</strong> <code>Blacklisted</code> events от контракта</li>
+            <li>Обработва ги и показва само <strong>текущо блокираните</strong> адреси</li>
+            <li>Автоматично се обновява при всяко отваряне на страницата</li>
+        </ul>
+
+        <div class="code-block">
+// Как работи:
+const filter = contract.filters.Blacklisted();
+const events = await contract.queryFilter(filter, 0, 'latest');
+
+// Обработка:
+// event.args.status === true  → блокиран
+// event.args.status === false → разблокиран
+        </div>
+
+        <!-- TROUBLESHOOTING -->
+        <h2 id="troubleshooting">6. Решаване на проблеми</h2>
+
+        <h3>❌ Проблем: "Contract address not configured"</h3>
+        <div class="error">
+            <strong>Причина:</strong> Не си променил <code>contractAddress</code> в CONFIG<br>
+            <strong>Решение:</strong> Промени <code>0xYOUR_CONTRACT_ADDRESS_HERE</code> на реалния адрес
+        </div>
+
+        <h3>❌ Проблем: "Web3 initialization failed"</h3>
+        <div class="error">
+            <strong>Възможни причини:</strong>
+            <ul>
+                <li>Няма интернет връзка</li>
+                <li>BSC RPC node не работи</li>
+                <li>Contract адресът е грешен</li>
+            </ul>
+            <strong>Решение:</strong> Провери console-а за точната грешка
+        </div>
+
+        <h3>❌ Проблем: Таймерът не се показва</h3>
+        <div class="error">
+            <strong>Възможни причини:</strong>
+            <ul>
+                <li>Contract адресът не е конфигуриран → Нормално е</li>
+                <li>Вече са минали 48 часа → Нормално е, таймерът се скрива</li>
+                <li>Грешка при четене на <code>tradingEnabledTime</code> → Виж console</li>
+            </ul>
+        </div>
+
+        <h3>❌ Проблем: Статистиките показват "N/A"</h3>
+        <div class="error">
+            <strong>Причина:</strong> Някои данни изискват допълнителна интеграция:<br>
+            <ul>
+                <li><strong>Token Price</strong> - трябва да се query-не liquidity pair</li>
+                <li><strong>Holders</strong> - трябва external API (BSCScan)</li>
+                <li><strong>24h Volume</strong> - трябва external API</li>
+            </ul>
+            <strong>Решение:</strong> Тези са по-сложни интеграции и не са задължителни за старт
+        </div>
+
+        <h3>✅ Проверка дали всичко работи:</h3>
+        <div class="success">
+            <ol>
+                <li>Отвори сайта</li>
+                <li>Натисни <code>F12</code> (Developer Tools)</li>
+                <li>Отвори таб <strong>Console</strong></li>
+                <li>Търси за съобщения:
+                    <ul>
+                        <li>✅ "Web3 initialized successfully"</li>
+                        <li>✅ "Connected to blockchain"</li>
+                    </ul>
+                </li>
+                <li>Отиди на таб <strong>Network</strong></li>
+                <li>Виж дали има requests към BSC RPC</li>
+            </ol>
+        </div>
+
+        <!-- FILES STRUCTURE -->
+        <h2 id="files">7. Файлова структура</h2>
+
+        <div class="info">
+            <h3>📁 Препоръчителна структура:</h3>
+            <div class="code-block">
+KCY1-Project/
+│
+├── index.html              ← Публичен сайт (качи на hosting)
+├── documentation.html      ← Техническа документация (САМО за теб)
+└── setup-guide.html        ← Това ръководство
+            </div>
+        </div>
+
+        <h3>🌐 Hosting:</h3>
+        <ul>
+            <li><strong>index.html</strong> → Качи на web hosting (Netlify, Vercel, GitHub Pages)</li>
+            <li><strong>documentation.html</strong> → НЕ качвай публично! Пази локално</li>
+            <li><strong>setup-guide.html</strong> → Пази локално за reference</li>
+        </ul>
+
+        <!-- SUMMARY -->
+        <h2 id="summary">8. Обобщение</h2>
+
+        <div class="success">
+            <h3>✅ Какво имаш готово:</h3>
+            <ul>
+                <li>🎨 Пълен публичен website с модерен дизайн</li>
+                <li>🔗 Web3 интеграция с реални blockchain данни</li>
+                <li>⏰ Автоматичен 48ч таймер</li>
+                <li>📊 Реални статистики от контракта</li>
+                <li>🚫 Автоматичен блоклист</li>
+                <li>📱 Responsive дизайн (работи на телефон/таблет)</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ Какво трябва ДА направиш:</h3>
+            <ol>
+                <li>Deploy smart contract-а</li>
+                <li>Промени <code>contractAddress</code> в CONFIG</li>
+                <li>Тествай локално</li>
+                <li>Качи на hosting</li>
+                <li>(Опционално) Добави чат линкове когато са готови</li>
+            </ol>
+        </div>
+
+        <div class="info">
+            <h3>💡 Препоръки:</h3>
+            <ul>
+                <li>Използвай <strong>Netlify</strong> или <strong>Vercel</strong> за безплатен hosting</li>
+                <li>Deploy-ни първо на <strong>testnet</strong> за тестване</li>
+                <li>Провери сайта на <strong>различни устройства</strong></li>
+                <li>Направи backup на всички файлове</li>
+            </ul>
+        </div>
+
+        <hr style="margin: 40px 0;">
+
+        <div style="text-align: center; opacity: 0.7;">
+            <p><strong>KCY1 Token © 2025</strong></p>
+            <p>Това ръководство обхваща само базовата Web3 интеграция</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -717,4 +717,121 @@
 
             try {
                 // Get blacklist events from blockchain
+                const filter = contract.filters.Blacklisted();
+                const events = await contract.queryFilter(filter, 0, 'latest');
                 
+                // Process events to get current blacklist state
+                const blacklistMap = new Map();
+                for (const event of events) {
+                    const address = event.args.account;
+                    const status = event.args.status;
+                    blacklistMap.set(address.toLowerCase(), status);
+                }
+
+                // Filter only currently blacklisted addresses
+                const blacklistedAddresses = Array.from(blacklistMap.entries())
+                    .filter(([addr, status]) => status === true)
+                    .map(([addr]) => addr);
+
+                if (blacklistedAddresses.length === 0) {
+                    document.getElementById('blacklistItems').innerHTML = 
+                        '<div class="info-box">✅ Няма блокирани адреси в момента</div>';
+                } else {
+                    const html = blacklistedAddresses.map(addr => 
+                        `<div class="blacklist-item">🚫 ${addr}</div>`
+                    ).join('');
+                    document.getElementById('blacklistItems').innerHTML = html;
+                }
+
+                document.getElementById('blacklistLoading').style.display = 'none';
+                document.getElementById('blacklistContent').style.display = 'block';
+            } catch (error) {
+                console.error('❌ Error loading blacklist:', error);
+                showBlacklistError(`Грешка при зареждане: ${error.message}`);
+            }
+        }
+
+        function showBlacklistError(message) {
+            document.getElementById('blacklistLoading').style.display = 'none';
+            document.getElementById('blacklistError').style.display = 'block';
+            document.getElementById('blacklistErrorMessage').textContent = message;
+        }
+
+        // ============================================
+        // HELPER FUNCTIONS
+        // ============================================
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(2) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(2) + 'K';
+            }
+            return num.toFixed(2);
+        }
+
+        // ============================================
+        // PAGE NAVIGATION
+        // ============================================
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(pageId).classList.add('active');
+            event.target.classList.add('active');
+
+            // Load data when switching pages
+            if (pageId === 'stats') loadStats();
+            if (pageId === 'blacklist') loadBlacklist();
+        }
+
+        // ============================================
+        // INITIALIZE LINKS
+        // ============================================
+        function initializeLinks() {
+            if (CONFIG.contractAddress !== '0xYOUR_CONTRACT_ADDRESS_HERE') {
+                document.getElementById('contractLink').href = 
+                    `${CONFIG.bscScanUrl}/token/${CONFIG.contractAddress}`;
+                document.getElementById('pancakeswapLink').href = 
+                    `${CONFIG.pancakeswapUrl}?outputCurrency=${CONFIG.contractAddress}`;
+                document.getElementById('chartLink').href = 
+                    `https://dexscreener.com/bsc/${CONFIG.contractAddress}`;
+            }
+
+            // Chat links
+            if (CONFIG.chatServerUrl) {
+                document.getElementById('chatServerLink').href = CONFIG.chatServerUrl;
+                document.getElementById('chatStatus').innerHTML = '🟢 Активен';
+                document.getElementById('chatStatus').style.color = '#4caf50';
+            }
+
+            if (CONFIG.chatAppUrl) {
+                document.getElementById('chatAppLink').href = CONFIG.chatAppUrl;
+                document.getElementById('appStatus').innerHTML = '🟢 Наличен';
+                document.getElementById('appStatus').style.color = '#4caf50';
+            }
+        }
+
+        // ============================================
+        // INITIALIZE ON LOAD
+        // ============================================
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log('🚀 Initializing KCY1 Website...');
+            
+            initializeLinks();
+            
+            const initialized = await initWeb3();
+            
+            if (initialized) {
+                console.log('✅ Connected to blockchain');
+                updateCountdown();
+            } else {
+                console.warn('⚠️ Contract not configured - using fallback mode');
+                document.getElementById('countdownTimer').classList.add('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
