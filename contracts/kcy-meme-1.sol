@@ -165,23 +165,14 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         tradingEnabledTime = block.timestamp + 48 hours;
         totalSupply = 1_000_000 * 10**decimals;
         
-        if (block.chainid == 97) {
-            isTestnet = true;
-            DEVw_mv = 0xCBfA2d3612b7474fF89c0746Ea6bAEee06A61702;
-            Mw_tng = 0x67eDbe18Ad6AB1ff0D57CCc511F56485EfFcabE7;
-            Tw_trz_hdn = 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6;
-            Aw_trzV = 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6;
-            pncswpRouter = 0xD99D1c33F9fC3444f8101754aBC46c52416550D1;
-            pncswpFactory = 0x6725F303b657a9451d8BA641348b6761A6CC7a17;
-        } else {
-            isTestnet = false;
-            DEVw_mv = 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
-            Mw_tng = 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
-            Tw_trz_hdn = 0x6300811567bed7d69B5AC271060a7E298f99fddd;
-            Aw_trzV = 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
-            pncswpRouter = 0x10ED43C718714eb63d5aA57B78B54704E256024E;
-            pncswpFactory = 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
-        }
+        isTestnet = block.chainid == 97;
+        
+        DEVw_mv = isTestnet ? 0xCBfA2d3612b7474fF89c0746Ea6bAEee06A61702 : 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
+        Mw_tng = isTestnet ? 0x67eDbe18Ad6AB1ff0D57CCc511F56485EfFcabE7 : 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
+        Tw_trz_hdn = isTestnet ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x6300811567bed7d69B5AC271060a7E298f99fddd;
+        Aw_trzV = isTestnet ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
+        pncswpRouter = isTestnet ? 0xD99D1c33F9fC3444f8101754aBC46c52416550D1 : 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+        pncswpFactory = isTestnet ? 0x6725F303b657a9451d8BA641348b6761A6CC7a17 : 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
         
         balanceOf[DEVw_mv] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
