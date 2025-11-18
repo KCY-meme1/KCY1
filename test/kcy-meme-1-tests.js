@@ -1,4 +1,4 @@
-// KCY1 Token (KCY-meme-1) v24 - Comprehensive Test Suite
+// KCY1 Token (KCY-meme-1) v26 - Complete Test Suite
 // Tests all critical fixes and functionality
 // Use with Hardhat: npx hardhat test
 
@@ -6,7 +6,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KCY1 Token v24 - Complete Test Suite", function() {
+describe("KCY1 Token v26 - Complete Test Suite", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
@@ -49,21 +49,30 @@ describe("KCY1 Token v24 - Complete Test Suite", function() {
             expect(await token.totalSupply()).to.equal(TOTAL_SUPPLY);
         });
         
-        it("1.3 Should set immutable owner correctly", async function() {
+        it("1.3 Should distribute tokens correctly on testnet (owner gets all)", async function() {
+            const distAddrs = await token.getDistributionAddresses();
+            expect(distAddrs.devWallet).to.equal(owner.address);
+            expect(await token.balanceOf(owner.address)).to.equal(DEV_WALLET_BALANCE);
+            expect(await token.balanceOf(await token.getAddress())).to.equal(CONTRACT_BALANCE);
+        });
+        
+        it("1.4 Should set immutable owner correctly", async function() {
             expect(await token.owner()).to.equal(owner.address);
         });
         
-        it("1.4 Should initialize 48-hour trading lock", async function() {
+        it("1.5 Should initialize 48-hour trading lock", async function() {
             expect(await token.isTradingEnabled()).to.equal(false);
             const timeLeft = await token.timeUntilTradingEnabled();
             expect(timeLeft).to.be.closeTo(TRADING_LOCK, 5);
         });
         
-        it("1.5 Should detect testnet deployment", async function() {
-            expect(await token.isTestnet()).to.equal(true);
+        it("1.6 Should detect testnet deployment (Hardhat = false)", async function() {
+            // FIX: Hardhat uses chainId 31337, not 97 (BSC testnet)
+            const isTestnet = await token.isTestnet();
+            expect(isTestnet).to.equal(false); // On Hardhat, chainId 31337
         });
         
-        it("1.6 Should start with empty exempt slots (4 slots)", async function() {
+        it("1.7 Should start with empty exempt slots (4 slots)", async function() {
             const exempts = await token.getExemptAddresses();
             expect(exempts.slots[0]).to.equal(ethers.ZeroAddress);
             expect(exempts.slots[1]).to.equal(ethers.ZeroAddress);
@@ -73,8 +82,31 @@ describe("KCY1 Token v24 - Complete Test Suite", function() {
         });
     });
     
-    describe("2. Exempt Slot Management", function() {
-        it("2.1 Should allow owner to set exempt slots (4 slots)", async function() {
+    describe("2. Initial Distribution", function() {
+        it("2.1 Should distribute tokens correctly on testnet (all to owner)", async function() {
+            await token.distributeInitialAllocations();
+            
+            expect(await token.balanceOf(owner.address)).to.equal(DEV_WALLET_BALANCE);
+            expect(await token.balanceOf(await token.getAddress())).to.equal(CONTRACT_BALANCE);
+        });
+        
+        it("2.2 Should only allow distribution once", async function() {
+            await token.distributeInitialAllocations();
+            
+            await expect(
+                token.distributeInitialAllocations()
+            ).to.be.revertedWith("Dist completed");
+        });
+        
+        it("2.3 Should only allow owner to call distribution", async function() {
+            await expect(
+                token.connect(addr1).distributeInitialAllocations()
+            ).to.be.revertedWith("Not owner");
+        });
+    });
+    
+    describe("3. Exempt Slot Management", function() {
+        it("3.1 Should allow owner to set exempt slots (4 slots)", async function() {
             await token.updateExemptSlots(
                 [exemptAddr1.address, exemptAddr2.address, ethers.ZeroAddress, ethers.ZeroAddress]
             );
@@ -84,7 +116,20 @@ describe("KCY1 Token v24 - Complete Test Suite", function() {
             expect(await token.isExemptAddress(addr1.address)).to.equal(false);
         });
         
-        it("2.2 Should permanently lock exempt slots", async function() {
+        it("3.2 Should allow multiple changes before lock", async function() {
+            await token.updateExemptSlots(
+                [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            expect(await token.isExemptAddress(exemptAddr1.address)).to.equal(true);
+            
+            await token.updateExemptSlots(
+                [exemptAddr2.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            expect(await token.isExemptAddress(exemptAddr1.address)).to.equal(false);
+            expect(await token.isExemptAddress(exemptAddr2.address)).to.equal(true);
+        });
+        
+        it("3.3 Should permanently lock exempt slots", async function() {
             await token.updateExemptSlots(
                 [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
             );
@@ -98,20 +143,73 @@ describe("KCY1 Token v24 - Complete Test Suite", function() {
                 )
             ).to.be.revertedWith("Slots locked");
         });
+        
+        it("3.4 Should recognize owner and contract as always exempt", async function() {
+            expect(await token.isExemptAddress(owner.address)).to.equal(true);
+            expect(await token.isExemptAddress(await token.getAddress())).to.equal(true);
+        });
     });
     
-    describe("3. Fee Mechanism (Unified 0.08%)", function() {
-        beforeEach(async function() {
-            await time.increase(TRADING_LOCK + 1);
-            const distAddrs = await token.getDistributionAddresses();
-            await ethers.provider.send("hardhat_impersonateAccount", [distAddrs.devWallet]);
-            const devSigner = await ethers.getSigner(distAddrs.devWallet);
-            await owner.sendTransaction({ to: distAddrs.devWallet, value: ethers.parseEther("1.0") });
-            await token.connect(devSigner).transfer(addr1.address, ethers.parseEther("10000"));
-            await ethers.provider.send("hardhat_stopImpersonatingAccount", [distAddrs.devWallet]);
+    describe("4. DEX Address Management", function() {
+        it("4.1 Should allow owner to update DEX addresses anytime", async function() {
+            const newRouter = addr3.address;
+            const newFactory = addr4.address;
+            
+            await token.updateDEXAddresses(newRouter, newFactory);
+            
+            const exempts = await token.getExemptAddresses();
+            expect(exempts.router).to.equal(newRouter);
+            expect(exempts.factory).to.equal(newFactory);
         });
         
-        it("3.1 Should apply 0.08% fee on normal transfers", async function() {
+        it("4.2 DEX addresses should remain updatable even after slots are locked", async function() {
+            await token.updateExemptSlots(
+                [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            await token.lockExemptSlotsForever();
+            expect(await token.exemptSlotsLocked()).to.equal(true);
+            
+            const newRouter = addr3.address;
+            const newFactory = addr4.address;
+            
+            await token.updateDEXAddresses(newRouter, newFactory);
+            
+            const exempts = await token.getExemptAddresses();
+            expect(exempts.router).to.equal(newRouter);
+            expect(exempts.factory).to.equal(newFactory);
+        });
+        
+        it("4.3 Should reject zero addresses for DEX", async function() {
+            const exempts = await token.getExemptAddresses();
+            
+            await expect(
+                token.updateDEXAddresses(ethers.ZeroAddress, exempts.factory)
+            ).to.be.revertedWith("Router zero");
+            
+            await expect(
+                token.updateDEXAddresses(exempts.router, ethers.ZeroAddress)
+            ).to.be.revertedWith("Factory zero");
+        });
+    });
+    
+    describe("5. Fee Mechanism (Unified 0.08%)", function() {
+        beforeEach(async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // FIX: Set addr1 as exempt temporarily to transfer large amount
+            await token.updateExemptSlots(
+                [addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            
+            await token.transfer(addr1.address, ethers.parseEther("10000"));
+            
+            // Remove addr1 from exempt slots
+            await token.updateExemptSlots(
+                [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+        });
+        
+        it("5.1 Should apply 0.08% fee on normal transfers", async function() {
             const amount = ethers.parseEther("1000");
             const burnFee = (amount * 30n) / 100000n;
             const ownerFee = (amount * 50n) / 100000n;
@@ -126,29 +224,178 @@ describe("KCY1 Token v24 - Complete Test Suite", function() {
             expect(await token.totalSupply()).to.equal(initialSupply - burnFee);
             expect(await token.balanceOf(owner.address)).to.equal(initialOwnerBalance + ownerFee);
         });
+        
+        it("5.2 Exempt to Exempt should have NO fees", async function() {
+            await token.updateExemptSlots(
+                [addr3.address, addr4.address, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            
+            await token.transfer(addr3.address, ethers.parseEther("1000"));
+            
+            const amount = ethers.parseEther("500");
+            await token.connect(addr3).transfer(addr4.address, amount);
+            
+            expect(await token.balanceOf(addr4.address)).to.equal(amount);
+        });
     });
     
-    describe("4. Transaction Limits", function() {
+    describe("6. Exempt Slot to Normal Transfer Restrictions", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
-            const distAddrs = await token.getDistributionAddresses();
-            await ethers.provider.send("hardhat_impersonateAccount", [distAddrs.devWallet]);
-            const devSigner = await ethers.getSigner(distAddrs.devWallet);
-            await owner.sendTransaction({ to: distAddrs.devWallet, value: ethers.parseEther("1.0") });
-            await token.connect(devSigner).transfer(addr1.address, ethers.parseEther("15000"));
-            await ethers.provider.send("hardhat_stopImpersonatingAccount", [distAddrs.devWallet]);
+            
+            await token.updateExemptSlots(
+                [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            
+            await token.transfer(exemptAddr1.address, ethers.parseEther("1000"));
         });
         
-        it("4.1 Should enforce max transaction limit (1,000 tokens)", async function() {
+        it("6.1 Should enforce 100 token limit for exempt→normal transfers", async function() {
+            await token.connect(exemptAddr1).transfer(addr1.address, MAX_EXEMPT_TO_NORMAL);
+            
+            const burnFee = (MAX_EXEMPT_TO_NORMAL * 30n) / 100000n;
+            const ownerFee = (MAX_EXEMPT_TO_NORMAL * 50n) / 100000n;
+            const netAmount = MAX_EXEMPT_TO_NORMAL - burnFee - ownerFee;
+            expect(await token.balanceOf(addr1.address)).to.equal(netAmount);
+            
+            await time.increase(EXEMPT_TO_NORMAL_COOLDOWN + 1);
+            await expect(
+                token.connect(exemptAddr1).transfer(addr2.address, ethers.parseEther("101"))
+            ).to.be.revertedWith("Max 100");
+        });
+        
+        it("6.2 Should enforce 24-hour cooldown for exempt→normal transfers", async function() {
+            await token.connect(exemptAddr1).transfer(addr1.address, ethers.parseEther("50"));
+            
+            await expect(
+                token.connect(exemptAddr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Wait 24h");
+            
+            await time.increase(EXEMPT_TO_NORMAL_COOLDOWN + 1);
+            await token.connect(exemptAddr1).transfer(addr2.address, ethers.parseEther("50"));
+            
+            const burnFee = (ethers.parseEther("50") * 30n) / 100000n;
+            const ownerFee = (ethers.parseEther("50") * 50n) / 100000n;
+            const netAmount = ethers.parseEther("50") - burnFee - ownerFee;
+            expect(await token.balanceOf(addr2.address)).to.equal(netAmount);
+        });
+        
+        it("6.3 Should apply 0.08% fee for exempt→normal (SAME as normal!)", async function() {
+            const amount = ethers.parseEther("100");
+            const burnFee = (amount * 30n) / 100000n;
+            const ownerFee = (amount * 50n) / 100000n;
+            const netAmount = amount - burnFee - ownerFee;
+            
+            const initialSupply = await token.totalSupply();
+            const initialOwnerBalance = await token.balanceOf(owner.address);
+            
+            await token.connect(exemptAddr1).transfer(addr1.address, amount);
+            
+            expect(await token.balanceOf(addr1.address)).to.equal(netAmount);
+            expect(await token.totalSupply()).to.equal(initialSupply - burnFee);
+            expect(await token.balanceOf(owner.address)).to.equal(initialOwnerBalance + ownerFee);
+        });
+    });
+    
+    describe("7. Pause and Blacklist Exemption", function() {
+        beforeEach(async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            await token.updateExemptSlots(
+                [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            
+            await token.transfer(exemptAddr1.address, ethers.parseEther("1000"));
+            
+            // FIX: Set addr1 as exempt temporarily
+            await token.updateExemptSlots(
+                [exemptAddr1.address, addr1.address, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            await token.transfer(addr1.address, ethers.parseEther("1000"));
+            await token.updateExemptSlots(
+                [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+        });
+        
+        it("7.1 Exempt addresses can transfer during pause", async function() {
+            await token.pause();
+            expect(await token.isPaused()).to.equal(true);
+            
+            await token.connect(exemptAddr1).transfer(addr2.address, ethers.parseEther("50"));
+            
+            const burnFee = (ethers.parseEther("50") * 30n) / 100000n;
+            const ownerFee = (ethers.parseEther("50") * 50n) / 100000n;
+            const netAmount = ethers.parseEther("50") - burnFee - ownerFee;
+            expect(await token.balanceOf(addr2.address)).to.equal(netAmount);
+            
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Paused");
+        });
+        
+        it("7.2 Blacklisted exempt addresses can still transfer", async function() {
+            await token.setBlacklist(exemptAddr1.address, true);
+            expect(await token.isBlacklisted(exemptAddr1.address)).to.equal(true);
+            
+            await token.connect(exemptAddr1).transfer(addr2.address, ethers.parseEther("50"));
+            
+            const burnFee = (ethers.parseEther("50") * 30n) / 100000n;
+            const ownerFee = (ethers.parseEther("50") * 50n) / 100000n;
+            const netAmount = ethers.parseEther("50") - burnFee - ownerFee;
+            expect(await token.balanceOf(addr2.address)).to.equal(netAmount);
+        });
+        
+        it("7.3 Blacklisted normal addresses cannot transfer", async function() {
+            await token.setBlacklist(addr1.address, true);
+            
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Blacklisted");
+        });
+    });
+    
+    describe("8. Transaction Limits for Normal Users", function() {
+        beforeEach(async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // FIX: Set addr1 as exempt temporarily to transfer large amount
+            await token.updateExemptSlots(
+                [addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            await token.transfer(addr1.address, ethers.parseEther("15000"));
+            await token.updateExemptSlots(
+                [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+        });
+        
+        it("8.1 Should enforce max transaction limit (1,000 tokens)", async function() {
             await token.connect(addr1).transfer(addr2.address, MAX_TX);
+            
             await time.increase(COOLDOWN + 1);
             await expect(
                 token.connect(addr1).transfer(addr3.address, ethers.parseEther("1001"))
             ).to.be.revertedWith("Max 1000");
         });
         
-        it("4.2 Should enforce 2-hour cooldown", async function() {
+        it("8.2 Should enforce max wallet limit (20,000 tokens)", async function() {
+            // Can't send more than max wallet in one transaction due to max tx limit
+            // This test verifies the max wallet check works
+            for (let i = 0; i < 19; i++) {
+                await token.connect(addr1).transfer(addr2.address, ethers.parseEther("1000"));
+                await time.increase(COOLDOWN + 1);
+            }
+            
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("1000"));
+            
+            await time.increase(COOLDOWN + 1);
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
+            ).to.be.revertedWith("Max wallet 20k");
+        });
+        
+        it("8.3 Should enforce 2-hour cooldown between transfers", async function() {
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("500"));
+            
             await expect(
                 token.connect(addr1).transfer(addr3.address, ethers.parseEther("500"))
             ).to.be.revertedWith("Wait 2h");
@@ -156,6 +403,171 @@ describe("KCY1 Token v24 - Complete Test Suite", function() {
             await time.increase(COOLDOWN + 1);
             await token.connect(addr1).transfer(addr3.address, ethers.parseEther("500"));
             expect(await token.balanceOf(addr3.address)).to.be.gt(0);
+        });
+    });
+    
+    describe("9. Owner Functions", function() {
+        it("9.1 Should allow owner to pause/unpause", async function() {
+            await token.pause();
+            expect(await token.isPaused()).to.equal(true);
+            
+            await time.increase(PAUSE_DURATION + 1);
+            expect(await token.isPaused()).to.equal(false);
+        });
+        
+        it("9.2 Should allow owner to blacklist addresses", async function() {
+            await token.setBlacklist(addr1.address, true);
+            expect(await token.isBlacklisted(addr1.address)).to.equal(true);
+            
+            await token.setBlacklist(addr1.address, false);
+            expect(await token.isBlacklisted(addr1.address)).to.equal(false);
+        });
+        
+        it("9.3 Should not allow blacklisting owner or contract", async function() {
+            await expect(
+                token.setBlacklist(owner.address, true)
+            ).to.be.revertedWith("No owner");
+            
+            await expect(
+                token.setBlacklist(await token.getAddress(), true)
+            ).to.be.revertedWith("No contract");
+        });
+        
+        it("9.4 Should allow owner to withdraw contract tokens", async function() {
+            const initialOwnerBalance = await token.balanceOf(owner.address);
+            const contractBalance = await token.balanceOf(await token.getAddress());
+            
+            await token.withdrawCirculationTokens(ethers.parseEther("10000"));
+            
+            expect(await token.balanceOf(owner.address)).to.equal(initialOwnerBalance + ethers.parseEther("10000"));
+            expect(await token.balanceOf(await token.getAddress())).to.equal(contractBalance - ethers.parseEther("10000"));
+        });
+        
+        it("9.5 Should allow owner to burn tokens", async function() {
+            const initialSupply = await token.totalSupply();
+            const initialOwnerBalance = await token.balanceOf(owner.address);
+            
+            await token.burn(ethers.parseEther("1000"));
+            
+            expect(await token.totalSupply()).to.equal(initialSupply - ethers.parseEther("1000"));
+            expect(await token.balanceOf(owner.address)).to.equal(initialOwnerBalance - ethers.parseEther("1000"));
+        });
+        
+        it("9.6 Should allow batch blacklisting", async function() {
+            const accounts = [addr1.address, addr2.address, addr3.address];
+            
+            await token.setBlacklistBatch(accounts, true);
+            
+            expect(await token.isBlacklisted(addr1.address)).to.equal(true);
+            expect(await token.isBlacklisted(addr2.address)).to.equal(true);
+            expect(await token.isBlacklisted(addr3.address)).to.equal(true);
+        });
+    });
+    
+    describe("10. Liquidity Pair Management", function() {
+        it("10.1 Should allow owner to add liquidity pair", async function() {
+            const pairAddr = addr3.address;
+            
+            await token.setLiquidityPair(pairAddr, true);
+            expect(await token.isLiquidityPair(pairAddr)).to.equal(true);
+        });
+        
+        it("10.2 Should allow batch addition of liquidity pairs", async function() {
+            const pairs = [addr3.address, addr4.address];
+            
+            await token.setLiquidityPairBatch(pairs, true);
+            
+            expect(await token.isLiquidityPair(pairs[0])).to.equal(true);
+            expect(await token.isLiquidityPair(pairs[1])).to.equal(true);
+        });
+        
+        it("10.3 Should block normal users from sending to liquidity pair", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // FIX: Use exempt transfer method
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.transfer(addr1.address, ethers.parseEther("1000"));
+            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            const pairAddr = addr3.address;
+            await token.setLiquidityPair(pairAddr, true);
+            
+            await expect(
+                token.connect(addr1).transfer(pairAddr, ethers.parseEther("100"))
+            ).to.be.revertedWith("Normal users cannot add liquidity directly");
+        });
+        
+        it("10.4 Should lock liquidity pairs forever", async function() {
+            const pairAddr = addr3.address;
+            await token.setLiquidityPair(pairAddr, true);
+            
+            await token.lockLiquidityPairsForever();
+            expect(await token.liquidityPairsLocked()).to.equal(true);
+            
+            await expect(
+                token.setLiquidityPair(addr4.address, true)
+            ).to.be.revertedWith("Pairs locked");
+        });
+    });
+    
+    describe("11. Security & Edge Cases", function() {
+        it("11.1 Should prevent non-owner from calling owner functions", async function() {
+            await expect(token.connect(addr1).pause()).to.be.revertedWith("Not owner");
+            await expect(token.connect(addr1).setBlacklist(addr2.address, true)).to.be.revertedWith("Not owner");
+            await expect(token.connect(addr1).burn(ethers.parseEther("100"))).to.be.revertedWith("Not owner");
+        });
+        
+        it("11.2 Should handle zero address transfers correctly", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            await expect(
+                token.transfer(ethers.ZeroAddress, ethers.parseEther("100"))
+            ).to.be.revertedWith("To zero");
+        });
+        
+        it("11.3 Should handle insufficient balance correctly", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
+            ).to.be.revertedWith("Low balance");
+        });
+        
+        it("11.4 Should handle allowance correctly", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.transfer(addr1.address, ethers.parseEther("1000"));
+            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            await token.connect(addr1).approve(addr2.address, ethers.parseEther("500"));
+            expect(await token.allowance(addr1.address, addr2.address)).to.equal(ethers.parseEther("500"));
+            
+            await token.connect(addr2).transferFrom(addr1.address, addr3.address, ethers.parseEther("200"));
+            expect(await token.allowance(addr1.address, addr2.address)).to.equal(ethers.parseEther("300"));
+        });
+    });
+    
+    describe("12. Trading Lock", function() {
+        it("12.1 Should prevent normal users from trading before 48h", async function() {
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.transfer(addr1.address, ethers.parseEther("1000"));
+            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
+            ).to.be.revertedWith("Locked 48h");
+        });
+        
+        it("12.2 Should allow trading after 48h", async function() {
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.transfer(addr1.address, ethers.parseEther("1000"));
+            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            await time.increase(TRADING_LOCK + 1);
+            
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
+            expect(await token.balanceOf(addr2.address)).to.be.gt(0);
         });
     });
 });
