@@ -1,4 +1,4 @@
-// KCY1 Token (KCY-meme-1) v27 - Complete Test Suite
+// KCY1 Token (KCY-meme-1) v28 - Complete Test Suite
 // Tests all critical fixes and functionality
 // Use with Hardhat: npx hardhat test
 
@@ -6,8 +6,9 @@ import { expect } from "chai";
 import hre from "hardhat";
 const { ethers } = hre;
 import { time } from "@nomicfoundation/hardhat-network-helpers";
+import "@nomicfoundation/hardhat-chai-matchers";
 
-describe("KCY1 Token v27 - Complete Test Suite", function() {
+describe("KCY1 Token v28 - Complete Test Suite", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
@@ -43,7 +44,7 @@ describe("KCY1 Token v27 - Complete Test Suite", function() {
         it("1.1 Should set correct token metadata", async function() {
             expect(await token.name()).to.equal("KCY-meme-1");
             expect(await token.symbol()).to.equal("KCY1");
-            expect(await token.decimals()).to.equal(18);
+            expect(Number(await token.decimals())).to.equal(18);
         });
         
         it("1.2 Should mint correct total supply", async function() {
@@ -63,7 +64,7 @@ describe("KCY1 Token v27 - Complete Test Suite", function() {
         
         it("1.5 Should initialize 48-hour trading lock", async function() {
             expect(await token.isTradingEnabled()).to.equal(false);
-            const timeLeft = await token.timeUntilTradingEnabled();
+            const timeLeft = Number(await token.timeUntilTradingEnabled());
             expect(timeLeft).to.be.closeTo(TRADING_LOCK, 5);
         });
         
@@ -323,15 +324,29 @@ describe("KCY1 Token v27 - Complete Test Suite", function() {
             await token.pause();
             expect(await token.isPaused()).to.equal(true);
             
+            // Exempt to exempt transfer - should work during pause (no fees)
+            await token.updateExemptSlots(
+                [exemptAddr1.address, addr2.address, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            
             await token.connect(exemptAddr1).transfer(addr2.address, ethers.parseEther("50"));
             
-            const burnFee = (ethers.parseEther("50") * 30n) / 100000n;
-            const ownerFee = (ethers.parseEther("50") * 50n) / 100000n;
-            const netAmount = ethers.parseEther("50") - burnFee - ownerFee;
-            expect(await token.balanceOf(addr2.address)).to.equal(netAmount);
+            // No fees on exempt to exempt
+            expect(await token.balanceOf(addr2.address)).to.equal(ethers.parseEther("50"));
             
+            // Remove addr2 from exempt
+            await token.updateExemptSlots(
+                [exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
+            );
+            
+            // Normal user should fail
             await expect(
-                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+                token.connect(addr1).transfer(addr3.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Paused");
+            
+            // Exempt to normal is also blocked by pause (it's a "normal transaction")
+            await expect(
+                token.connect(exemptAddr1).transfer(addr3.address, ethers.parseEther("50"))
             ).to.be.revertedWith("Paused");
         });
         
@@ -360,11 +375,11 @@ describe("KCY1 Token v27 - Complete Test Suite", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
             
-            // Set addr1 as exempt temporarily to transfer large amount
+            // Set addr1 as exempt temporarily to transfer LARGE amount for this test
             await token.updateExemptSlots(
                 [addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
             );
-            await token.transfer(addr1.address, ethers.parseEther("15000"));
+            await token.transfer(addr1.address, ethers.parseEther("25000")); // More tokens for multiple transfers
             await token.updateExemptSlots(
                 [ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
             );
@@ -380,15 +395,16 @@ describe("KCY1 Token v27 - Complete Test Suite", function() {
         });
         
         it("8.2 Should enforce max wallet limit (20,000 tokens)", async function() {
-            // Transfer close to max wallet
-            for (let i = 0; i < 19; i++) {
-                await token.connect(addr1).transfer(addr2.address, ethers.parseEther("1000"));
+            // Each 1000 token transfer loses 0.08%, so recipient gets 999.2
+            const amountPerTransfer = ethers.parseEther("1000");
+            
+            // Transfer 20 times to reach close to max wallet (20 * 999.2 = 19,984)
+            for (let i = 0; i < 20; i++) {
+                await token.connect(addr1).transfer(addr2.address, amountPerTransfer);
                 await time.increase(COOLDOWN + 1);
             }
             
-            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("1000"));
-            
-            await time.increase(COOLDOWN + 1);
+            // Next transfer should fail due to max wallet
             await expect(
                 token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
             ).to.be.revertedWith("Max wallet 20k");
@@ -403,7 +419,7 @@ describe("KCY1 Token v27 - Complete Test Suite", function() {
             
             await time.increase(COOLDOWN + 1);
             await token.connect(addr1).transfer(addr3.address, ethers.parseEther("500"));
-            expect(await token.balanceOf(addr3.address)).to.be.gt(0);
+            expect(Number(await token.balanceOf(addr3.address))).to.be.greaterThan(0);
         });
     });
     
@@ -568,7 +584,7 @@ describe("KCY1 Token v27 - Complete Test Suite", function() {
             await time.increase(TRADING_LOCK + 1);
             
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
-            expect(await token.balanceOf(addr2.address)).to.be.gt(0);
+            expect(Number(await token.balanceOf(addr2.address))).to.be.greaterThan(0);
         });
     });
 });

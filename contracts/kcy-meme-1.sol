@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY-meme-1 Token (KCY1) - v27
+ * @title KCY-meme-1 Token (KCY1) - v28
  * @dev Complete rules:
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
@@ -37,7 +37,7 @@ pragma solidity ^0.8.20;
  *        - BSC Testnet (chainid 97): Testnet wallets
  *        - BSC Mainnet (chainid 56): Real wallets
  * 
- * @author Production Version - v27
+ * @author Production Version - v28
  */
 
 interface IERC20 {
