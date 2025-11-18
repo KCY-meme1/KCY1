@@ -1,6 +1,5 @@
 import "@nomicfoundation/hardhat-toolbox";
 
-/** @type import('hardhat/config').HardhatUserConfig */
 export default {
   solidity: {
     version: "0.8.20",
@@ -15,5 +14,8 @@ export default {
     hardhat: {
       chainId: 31337
     }
+  },
+  mocha: {
+    timeout: 60000
   }
 };

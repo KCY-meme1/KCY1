@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY-meme-1 Token (KCY1) - v28
+ * @title KCY-meme-1 Token (KCY1) - v29
  * @dev Complete rules:
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
@@ -37,7 +37,7 @@ pragma solidity ^0.8.20;
  *        - BSC Testnet (chainid 97): Testnet wallets
  *        - BSC Mainnet (chainid 56): Real wallets
  * 
- * @author Production Version - v28
+ * @author Production Version - v29
  */
 
 interface IERC20 {
@@ -169,7 +169,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         // Detect network: Hardhat (31337) or BSC Testnet (97)
         isTestnet = block.chainid == 97 || block.chainid == 31337;
         
-        // FIX: Use ternary operators for immutable variables
+        // Use ternary operators for immutable variables
         DEVw_mv = block.chainid == 31337 ? msg.sender : 
                   (block.chainid == 97 ? 0xCBfA2d3612b7474fF89c0746Ea6bAEee06A61702 : 0x567c1c5e9026E04078F9b92DcF295A58355f60c7);
         
