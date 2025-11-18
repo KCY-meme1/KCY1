@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY-meme-1 Token (KCY1) - v24
+ * @title KCY-meme-1 Token (KCY1) - v27
  * @dev Complete rules:
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
@@ -33,10 +33,11 @@ pragma solidity ^0.8.20;
  *        - Liquidity Pairs: CAN be locked forever
  * 
  *      DEPLOYMENT:
- *        - Testnet (chainid 97): Your testnet wallets + Testnet Router/Factory
- *        - Mainnet (chainid 56): Real wallets + Mainnet Router/Factory
+ *        - Hardhat (chainid 31337): Deployer gets tokens
+ *        - BSC Testnet (chainid 97): Testnet wallets
+ *        - BSC Mainnet (chainid 56): Real wallets
  * 
- * @author Production Version - v24
+ * @author Production Version - v27
  */
 
 interface IERC20 {
@@ -165,14 +166,24 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         tradingEnabledTime = block.timestamp + 48 hours;
         totalSupply = 1_000_000 * 10**decimals;
         
-        isTestnet = block.chainid == 97;
+        // Detect network: Hardhat (31337) or BSC Testnet (97)
+        isTestnet = block.chainid == 97 || block.chainid == 31337;
         
-        DEVw_mv = isTestnet ? 0xCBfA2d3612b7474fF89c0746Ea6bAEee06A61702 : 0x567c1c5e9026E04078F9b92DcF295A58355f60c7;
-        Mw_tng = isTestnet ? 0x67eDbe18Ad6AB1ff0D57CCc511F56485EfFcabE7 : 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A;
-        Tw_trz_hdn = isTestnet ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x6300811567bed7d69B5AC271060a7E298f99fddd;
-        Aw_trzV = isTestnet ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87;
-        pncswpRouter = isTestnet ? 0xD99D1c33F9fC3444f8101754aBC46c52416550D1 : 0x10ED43C718714eb63d5aA57B78B54704E256024E;
-        pncswpFactory = isTestnet ? 0x6725F303b657a9451d8BA641348b6761A6CC7a17 : 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
+        // FIX: Use ternary operators for immutable variables
+        DEVw_mv = block.chainid == 31337 ? msg.sender : 
+                  (block.chainid == 97 ? 0xCBfA2d3612b7474fF89c0746Ea6bAEee06A61702 : 0x567c1c5e9026E04078F9b92DcF295A58355f60c7);
+        
+        Mw_tng = block.chainid == 31337 ? msg.sender :
+                 (block.chainid == 97 ? 0x67eDbe18Ad6AB1ff0D57CCc511F56485EfFcabE7 : 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A);
+        
+        Tw_trz_hdn = block.chainid == 31337 ? msg.sender :
+                     (block.chainid == 97 ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x6300811567bed7d69B5AC271060a7E298f99fddd);
+        
+        Aw_trzV = block.chainid == 31337 ? msg.sender :
+                  (block.chainid == 97 ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87);
+        
+        pncswpRouter = block.chainid == 97 ? 0xD99D1c33F9fC3444f8101754aBC46c52416550D1 : 0x10ED43C718714eb63d5aA57B78B54704E256024E;
+        pncswpFactory = block.chainid == 97 ? 0x6725F303b657a9451d8BA641348b6761A6CC7a17 : 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
         
         balanceOf[DEVw_mv] = 600_000 * 10**decimals;
         balanceOf[address(this)] = 400_000 * 10**decimals;
@@ -192,21 +203,21 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         
         initialDistributionCompleted = true;
         
-        if (Mw_tng != address(0) && Mrkt_alloc > 0) {
+        if (Mw_tng != address(0) && Mw_tng != DEVw_mv && Mrkt_alloc > 0) {
             balanceOf[DEVw_mv] -= Mrkt_alloc;
             balanceOf[Mw_tng] += Mrkt_alloc;
             emit Transfer(DEVw_mv, Mw_tng, Mrkt_alloc);
             emit DistributionSent(Mw_tng, Mrkt_alloc);
         }
         
-        if (Tw_trz_hdn != address(0) && T_alloc > 0) {
+        if (Tw_trz_hdn != address(0) && Tw_trz_hdn != DEVw_mv && T_alloc > 0) {
             balanceOf[DEVw_mv] -= T_alloc;
             balanceOf[Tw_trz_hdn] += T_alloc;
             emit Transfer(DEVw_mv, Tw_trz_hdn, T_alloc);
             emit DistributionSent(Tw_trz_hdn, T_alloc);
         }
         
-        if (Aw_trzV != address(0) && Adv_alloc > 0) {
+        if (Aw_trzV != address(0) && Aw_trzV != DEVw_mv && Adv_alloc > 0) {
             balanceOf[DEVw_mv] -= Adv_alloc;
             balanceOf[Aw_trzV] += Adv_alloc;
             emit Transfer(DEVw_mv, Aw_trzV, Adv_alloc);

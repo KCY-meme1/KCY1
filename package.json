@@ -1,16 +1,17 @@
 {
   "name": "kcy1-token-tests",
   "version": "1.0.0",
-  "devDependencies": {
-    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
-    "chai": "^4.5.0",
-    "dotenv": "^17.2.3",
-    "ethers": "^6.15.0",
-    "hardhat": "^2.27.0"
-  },
+  "description": "KCY1 Token v26 Test Suite",
+  "type": "module",
   "scripts": {
     "test": "hardhat test",
-    "test:verbose": "hardhat test --verbose",
-    "test:gas": "REPORT_GAS=true hardhat test"
+    "compile": "hardhat compile"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "chai": "^4.3.7",
+    "ethers": "^6.4.0",
+    "hardhat": "^2.22.0"
   }
 }

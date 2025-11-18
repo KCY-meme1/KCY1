@@ -1,12 +1,13 @@
-// KCY1 Token (KCY-meme-1) v26 - Complete Test Suite
+// KCY1 Token (KCY-meme-1) v27 - Complete Test Suite
 // Tests all critical fixes and functionality
 // Use with Hardhat: npx hardhat test
 
-const { expect } = require("chai");
-const { ethers } = require("hardhat");
-const { time } = require("@nomicfoundation/hardhat-network-helpers");
+import { expect } from "chai";
+import hre from "hardhat";
+const { ethers } = hre;
+import { time } from "@nomicfoundation/hardhat-network-helpers";
 
-describe("KCY1 Token v26 - Complete Test Suite", function() {
+describe("KCY1 Token v27 - Complete Test Suite", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
@@ -49,7 +50,7 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
             expect(await token.totalSupply()).to.equal(TOTAL_SUPPLY);
         });
         
-        it("1.3 Should distribute tokens correctly on testnet (owner gets all)", async function() {
+        it("1.3 Should distribute tokens correctly on Hardhat (owner gets all)", async function() {
             const distAddrs = await token.getDistributionAddresses();
             expect(distAddrs.devWallet).to.equal(owner.address);
             expect(await token.balanceOf(owner.address)).to.equal(DEV_WALLET_BALANCE);
@@ -66,10 +67,10 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
             expect(timeLeft).to.be.closeTo(TRADING_LOCK, 5);
         });
         
-        it("1.6 Should detect testnet deployment (Hardhat = false)", async function() {
-            // FIX: Hardhat uses chainId 31337, not 97 (BSC testnet)
+        it("1.6 Should detect testnet deployment (Hardhat = true)", async function() {
+            // On Hardhat (chainId 31337), isTestnet should be true
             const isTestnet = await token.isTestnet();
-            expect(isTestnet).to.equal(false); // On Hardhat, chainId 31337
+            expect(isTestnet).to.equal(true);
         });
         
         it("1.7 Should start with empty exempt slots (4 slots)", async function() {
@@ -83,9 +84,10 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
     });
     
     describe("2. Initial Distribution", function() {
-        it("2.1 Should distribute tokens correctly on testnet (all to owner)", async function() {
+        it("2.1 Should not distribute on Hardhat (all same address)", async function() {
             await token.distributeInitialAllocations();
             
+            // On Hardhat, all wallets are the same (owner)
             expect(await token.balanceOf(owner.address)).to.equal(DEV_WALLET_BALANCE);
             expect(await token.balanceOf(await token.getAddress())).to.equal(CONTRACT_BALANCE);
         });
@@ -196,7 +198,7 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
             
-            // FIX: Set addr1 as exempt temporarily to transfer large amount
+            // Set addr1 as exempt temporarily to transfer large amount
             await token.updateExemptSlots(
                 [addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
             );
@@ -307,7 +309,7 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
             
             await token.transfer(exemptAddr1.address, ethers.parseEther("1000"));
             
-            // FIX: Set addr1 as exempt temporarily
+            // Set addr1 as exempt temporarily
             await token.updateExemptSlots(
                 [exemptAddr1.address, addr1.address, ethers.ZeroAddress, ethers.ZeroAddress]
             );
@@ -358,7 +360,7 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
             
-            // FIX: Set addr1 as exempt temporarily to transfer large amount
+            // Set addr1 as exempt temporarily to transfer large amount
             await token.updateExemptSlots(
                 [addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]
             );
@@ -378,8 +380,7 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
         });
         
         it("8.2 Should enforce max wallet limit (20,000 tokens)", async function() {
-            // Can't send more than max wallet in one transaction due to max tx limit
-            // This test verifies the max wallet check works
+            // Transfer close to max wallet
             for (let i = 0; i < 19; i++) {
                 await token.connect(addr1).transfer(addr2.address, ethers.parseEther("1000"));
                 await time.increase(COOLDOWN + 1);
@@ -484,7 +485,7 @@ describe("KCY1 Token v26 - Complete Test Suite", function() {
         it("10.3 Should block normal users from sending to liquidity pair", async function() {
             await time.increase(TRADING_LOCK + 1);
             
-            // FIX: Use exempt transfer method
+            // Use exempt transfer method
             await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
             await token.transfer(addr1.address, ethers.parseEther("1000"));
             await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
