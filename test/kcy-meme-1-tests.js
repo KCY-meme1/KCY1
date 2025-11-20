@@ -1,4 +1,4 @@
-// KCY1 Token (KCY-meme-1) v29 - Complete Test Suite
+// KCY1 Token (KCY-meme-1) v31 - Complete Test Suite (100M Supply)
 // Tests all critical fixes and functionality
 // Use with Hardhat: npx hardhat test
 
@@ -6,16 +6,16 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KCY1 Token v29 - Complete Test Suite", function() {
+describe("KCY1 Token v31 - Complete Test Suite (100M Supply)", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
     let exemptAddr1, exemptAddr2;
     let addrs;
     
-    const TOTAL_SUPPLY = ethers.parseEther("1000000");
-    const DEV_WALLET_BALANCE = ethers.parseEther("600000");
-    const CONTRACT_BALANCE = ethers.parseEther("400000");
+    const TOTAL_SUPPLY = ethers.parseEther("100000000");
+    const DEV_WALLET_BALANCE = ethers.parseEther("96000000");
+    const CONTRACT_BALANCE = ethers.parseEther("4000000");
     const MAX_TX = ethers.parseEther("1000");
     const MAX_WALLET = ethers.parseEther("20000");
     const MAX_EXEMPT_TO_NORMAL = ethers.parseEther("100");
@@ -24,11 +24,11 @@ describe("KCY1 Token v29 - Complete Test Suite", function() {
     const TRADING_LOCK = 48 * 60 * 60;
     const PAUSE_DURATION = 48 * 60 * 60;
     
-    const MARKETING_ALLOCATION = ethers.parseEther("150000");
-    const TEAM_ALLOCATION = ethers.parseEther("200000");
-    const ADVISOR_ALLOCATION = ethers.parseEther("150000");
-    const TOTAL_DISTRIBUTION = ethers.parseEther("500000");
-    const DEV_REMAINING = ethers.parseEther("100000");
+    const MARKETING_ALLOCATION = ethers.parseEther("1500000");
+    const TEAM_ALLOCATION = ethers.parseEther("1000000");
+    const ADVISOR_ALLOCATION = ethers.parseEther("1500000");
+    const TOTAL_DISTRIBUTION = ethers.parseEther("4000000");
+    const DEV_REMAINING = ethers.parseEther("96000000");
     
     beforeEach(async function() {
         [owner, addr1, addr2, addr3, addr4, addr5, exemptAddr1, exemptAddr2, ...addrs] = await ethers.getSigners();

@@ -1,5 +1,6 @@
 artifacts/
 cache/
+fromAI/
 node_modules/
 .env
 package-lock.json

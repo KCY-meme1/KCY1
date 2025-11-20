@@ -32,10 +32,10 @@ contract MockKCY1Distribution is IERC20 {
     address public immutable Tw_trz_hdn;
     address public immutable Aw_trzV;
     
-    uint256 private constant Mrkt_alloc = 150_000 * 10**18;
-    uint256 private constant T_alloc = 200_000 * 10**18;
-    uint256 private constant Adv_alloc = 150_000 * 10**18;
-    uint256 private constant Tot_dist = 500_000 * 10**18;
+    uint256 private constant Mrkt_alloc = 1_500_000 * 10**18;
+    uint256 private constant T_alloc = 1_000_000 * 10**18;
+    uint256 private constant Adv_alloc = 1_500_000 * 10**18;
+    uint256 private constant Tot_dist = 4_000_000 * 10**18;
     
     bool public initialDistributionCompleted;
     
@@ -53,7 +53,7 @@ contract MockKCY1Distribution is IERC20 {
         address _advisorWallet
     ) {
         owner = msg.sender;
-        totalSupply = 1_000_000 * 10**decimals;
+        totalSupply = 100_000_000 * 10**decimals;
         
         // Use provided addresses
         DEVw_mv = _devWallet;
@@ -62,41 +62,41 @@ contract MockKCY1Distribution is IERC20 {
         Aw_trzV = _advisorWallet;
         
         // Initial distribution
-        balanceOf[DEVw_mv] = 600_000 * 10**decimals;
-        balanceOf[address(this)] = 400_000 * 10**decimals;
+        balanceOf[DEVw_mv] = 96_000_000 * 10**decimals;
+        balanceOf[address(this)] = 4_000_000 * 10**decimals;
         
-        emit Transfer(address(0), DEVw_mv, 600_000 * 10**decimals);
-        emit Transfer(address(0), address(this), 400_000 * 10**decimals);
+        emit Transfer(address(0), DEVw_mv, 96_000_000 * 10**decimals);
+        emit Transfer(address(0), address(this), 4_000_000 * 10**decimals);
     }
     
     function distributeInitialAllocations() external {
         require(msg.sender == owner, "Not owner");
         require(!initialDistributionCompleted, "Dist completed");
-        require(balanceOf[DEVw_mv] >= Tot_dist, "Dw balance low");
+        require(balanceOf[address(this)] >= Tot_dist, "Contract balance low");
         
         initialDistributionCompleted = true;
         
         // Marketing allocation
         if (Mw_tng != address(0) && Mw_tng != DEVw_mv && Mrkt_alloc > 0) {
-            balanceOf[DEVw_mv] -= Mrkt_alloc;
+            balanceOf[address(this)] -= Mrkt_alloc;
             balanceOf[Mw_tng] += Mrkt_alloc;
-            emit Transfer(DEVw_mv, Mw_tng, Mrkt_alloc);
+            emit Transfer(address(this), Mw_tng, Mrkt_alloc);
             emit DistributionSent(Mw_tng, Mrkt_alloc);
         }
         
         // Team allocation
         if (Tw_trz_hdn != address(0) && Tw_trz_hdn != DEVw_mv && T_alloc > 0) {
-            balanceOf[DEVw_mv] -= T_alloc;
+            balanceOf[address(this)] -= T_alloc;
             balanceOf[Tw_trz_hdn] += T_alloc;
-            emit Transfer(DEVw_mv, Tw_trz_hdn, T_alloc);
+            emit Transfer(address(this), Tw_trz_hdn, T_alloc);
             emit DistributionSent(Tw_trz_hdn, T_alloc);
         }
         
         // Advisor allocation
         if (Aw_trzV != address(0) && Aw_trzV != DEVw_mv && Adv_alloc > 0) {
-            balanceOf[DEVw_mv] -= Adv_alloc;
+            balanceOf[address(this)] -= Adv_alloc;
             balanceOf[Aw_trzV] += Adv_alloc;
-            emit Transfer(DEVw_mv, Aw_trzV, Adv_alloc);
+            emit Transfer(address(this), Aw_trzV, Adv_alloc);
             emit DistributionSent(Aw_trzV, Adv_alloc);
         }
         

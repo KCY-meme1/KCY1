@@ -1,24 +1,25 @@
-// KCY1 Token - Real Distribution Testing with Different Addresses
+// KCY1 Token v31 - Real Distribution Testing with Different Addresses (100M Supply)
 // This test uses MockKCY1Distribution to test REAL distribution behavior
 
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("KCY1 Token - REAL Distribution Testing (Different Wallets)", function() {
+describe("KCY1 Token v31 - REAL Distribution Testing (100M Supply)", function() {
     let mockToken;
     let owner;
     let devWallet, marketingWallet, teamWallet, advisorWallet;
     let addr1, addr2;
     
-    const TOTAL_SUPPLY = ethers.parseEther("1000000");
-    const DEV_INITIAL_BALANCE = ethers.parseEther("600000");
-    const CONTRACT_BALANCE = ethers.parseEther("400000");
+    const TOTAL_SUPPLY = ethers.parseEther("100000000");
+    const DEV_INITIAL_BALANCE = ethers.parseEther("96000000");
+    const CONTRACT_BALANCE = ethers.parseEther("4000000");
     
-    const MARKETING_ALLOCATION = ethers.parseEther("150000");
-    const TEAM_ALLOCATION = ethers.parseEther("200000");
-    const ADVISOR_ALLOCATION = ethers.parseEther("150000");
-    const TOTAL_DISTRIBUTION = ethers.parseEther("500000");
-    const DEV_REMAINING = ethers.parseEther("100000");
+    const MARKETING_ALLOCATION = ethers.parseEther("1500000");
+    const TEAM_ALLOCATION = ethers.parseEther("1000000");
+    const ADVISOR_ALLOCATION = ethers.parseEther("1500000");
+    const TOTAL_DISTRIBUTION = ethers.parseEther("4000000");
+    const DEV_REMAINING = ethers.parseEther("96000000"); // DEV не се променя
+    const CONTRACT_REMAINING = ethers.parseEther("0"); // Contract става 0
     
     beforeEach(async function() {
         [owner, devWallet, marketingWallet, teamWallet, advisorWallet, addr1, addr2] = await ethers.getSigners();
@@ -66,23 +67,24 @@ describe("KCY1 Token - REAL Distribution Testing (Different Wallets)", function(
     });
     
     describe("Distribution Execution", function() {
-        it("Should emit Transfer events for EACH distribution wallet", async function() {
+        it("Should emit Transfer events from CONTRACT to EACH distribution wallet", async function() {
+            const contractAddress = await mockToken.getAddress();
             const tx = await mockToken.distributeInitialAllocations();
             
-            // Check Transfer to Marketing wallet
+            // Check Transfer from CONTRACT to Marketing wallet
             await expect(tx)
                 .to.emit(mockToken, "Transfer")
-                .withArgs(devWallet.address, marketingWallet.address, MARKETING_ALLOCATION);
+                .withArgs(contractAddress, marketingWallet.address, MARKETING_ALLOCATION);
             
-            // Check Transfer to Team wallet
+            // Check Transfer from CONTRACT to Team wallet
             await expect(tx)
                 .to.emit(mockToken, "Transfer")
-                .withArgs(devWallet.address, teamWallet.address, TEAM_ALLOCATION);
+                .withArgs(contractAddress, teamWallet.address, TEAM_ALLOCATION);
             
-            // Check Transfer to Advisor wallet
+            // Check Transfer from CONTRACT to Advisor wallet
             await expect(tx)
                 .to.emit(mockToken, "Transfer")
-                .withArgs(devWallet.address, advisorWallet.address, ADVISOR_ALLOCATION);
+                .withArgs(contractAddress, advisorWallet.address, ADVISOR_ALLOCATION);
         });
         
         it("Should emit DistributionSent events for EACH distribution wallet", async function() {
@@ -110,7 +112,7 @@ describe("KCY1 Token - REAL Distribution Testing (Different Wallets)", function(
                 .withArgs(TOTAL_DISTRIBUTION);
         });
         
-        it("Should have exactly 4 events: 3 Transfers + 3 DistributionSent + 1 InitialDistributionCompleted", async function() {
+        it("Should have exactly 7 events: 3 Transfers + 3 DistributionSent + 1 InitialDistributionCompleted", async function() {
             const tx = await mockToken.distributeInitialAllocations();
             const receipt = await tx.wait();
             
@@ -135,49 +137,49 @@ describe("KCY1 Token - REAL Distribution Testing (Different Wallets)", function(
             await mockToken.distributeInitialAllocations();
         });
         
-        it("✅ Marketing wallet should have EXACTLY 150,000 tokens", async function() {
+        it("✅ Marketing wallet should have EXACTLY 1,500,000 tokens", async function() {
             const balance = await mockToken.balanceOf(marketingWallet.address);
             expect(balance).to.equal(MARKETING_ALLOCATION);
-            expect(balance).to.equal(ethers.parseEther("150000"));
+            expect(balance).to.equal(ethers.parseEther("1500000"));
         });
         
-        it("✅ Team wallet should have EXACTLY 200,000 tokens", async function() {
+        it("✅ Team wallet should have EXACTLY 1,000,000 tokens", async function() {
             const balance = await mockToken.balanceOf(teamWallet.address);
             expect(balance).to.equal(TEAM_ALLOCATION);
-            expect(balance).to.equal(ethers.parseEther("200000"));
+            expect(balance).to.equal(ethers.parseEther("1000000"));
         });
         
-        it("✅ Advisor wallet should have EXACTLY 150,000 tokens", async function() {
+        it("✅ Advisor wallet should have EXACTLY 1,500,000 tokens", async function() {
             const balance = await mockToken.balanceOf(advisorWallet.address);
             expect(balance).to.equal(ADVISOR_ALLOCATION);
-            expect(balance).to.equal(ethers.parseEther("150000"));
+            expect(balance).to.equal(ethers.parseEther("1500000"));
         });
         
-        it("✅ Dev wallet should have EXACTLY 100,000 tokens remaining", async function() {
+        it("✅ Dev wallet should have EXACTLY 96,000,000 tokens remaining (unchanged)", async function() {
             const balance = await mockToken.balanceOf(devWallet.address);
             expect(balance).to.equal(DEV_REMAINING);
-            expect(balance).to.equal(ethers.parseEther("100000"));
+            expect(balance).to.equal(ethers.parseEther("96000000"));
         });
         
-        it("✅ Contract should still have 400,000 tokens", async function() {
+        it("✅ Contract should have 0 tokens after distribution", async function() {
             const balance = await mockToken.balanceOf(await mockToken.getAddress());
-            expect(balance).to.equal(CONTRACT_BALANCE);
-            expect(balance).to.equal(ethers.parseEther("400000"));
+            expect(balance).to.equal(CONTRACT_REMAINING);
+            expect(balance).to.equal(ethers.parseEther("0"));
         });
         
-        it("✅ Total of all distributed tokens should equal 500,000", async function() {
+        it("✅ Total of all distributed tokens should equal 4,000,000", async function() {
             const marketingBalance = await mockToken.balanceOf(marketingWallet.address);
             const teamBalance = await mockToken.balanceOf(teamWallet.address);
             const advisorBalance = await mockToken.balanceOf(advisorWallet.address);
             
             const totalDistributed = marketingBalance + teamBalance + advisorBalance;
             expect(totalDistributed).to.equal(TOTAL_DISTRIBUTION);
-            expect(totalDistributed).to.equal(ethers.parseEther("500000"));
+            expect(totalDistributed).to.equal(ethers.parseEther("4000000"));
         });
         
-        it("✅ Total supply should remain unchanged at 1,000,000", async function() {
+        it("✅ Total supply should remain unchanged at 100,000,000", async function() {
             expect(await mockToken.totalSupply()).to.equal(TOTAL_SUPPLY);
-            expect(await mockToken.totalSupply()).to.equal(ethers.parseEther("1000000"));
+            expect(await mockToken.totalSupply()).to.equal(ethers.parseEther("100000000"));
         });
         
         it("✅ Sum of all balances should equal total supply", async function() {
@@ -194,25 +196,26 @@ describe("KCY1 Token - REAL Distribution Testing (Different Wallets)", function(
     
     describe("Distribution Math Verification", function() {
         it("Should verify allocation percentages", async function() {
-            // Dev starts with 600,000 (60%)
-            expect(DEV_INITIAL_BALANCE).to.equal(TOTAL_SUPPLY * 60n / 100n);
+            // Dev starts with 96,000,000 (96%)
+            expect(DEV_INITIAL_BALANCE).to.equal(TOTAL_SUPPLY * 96n / 100n);
             
-            // Marketing gets 150,000 (15% of total supply)
-            expect(MARKETING_ALLOCATION).to.equal(TOTAL_SUPPLY * 15n / 100n);
+            // Contract starts with 4,000,000 (4%)
+            expect(CONTRACT_BALANCE).to.equal(TOTAL_SUPPLY * 4n / 100n);
             
-            // Team gets 200,000 (20% of total supply)
-            expect(TEAM_ALLOCATION).to.equal(TOTAL_SUPPLY * 20n / 100n);
+            // Marketing gets 1,500,000 (1.5% of total supply)
+            expect(MARKETING_ALLOCATION).to.equal(TOTAL_SUPPLY * 15n / 1000n);
             
-            // Advisor gets 150,000 (15% of total supply)
-            expect(ADVISOR_ALLOCATION).to.equal(TOTAL_SUPPLY * 15n / 100n);
+            // Team gets 1,000,000 (1% of total supply)
+            expect(TEAM_ALLOCATION).to.equal(TOTAL_SUPPLY * 10n / 1000n);
             
-            // Dev remaining is 100,000 (10% of total supply)
-            expect(DEV_REMAINING).to.equal(TOTAL_SUPPLY * 10n / 100n);
+            // Advisor gets 1,500,000 (1.5% of total supply)
+            expect(ADVISOR_ALLOCATION).to.equal(TOTAL_SUPPLY * 15n / 1000n);
         });
         
         it("Should verify distribution adds up correctly", async function() {
             expect(MARKETING_ALLOCATION + TEAM_ALLOCATION + ADVISOR_ALLOCATION).to.equal(TOTAL_DISTRIBUTION);
-            expect(DEV_INITIAL_BALANCE - TOTAL_DISTRIBUTION).to.equal(DEV_REMAINING);
+            expect(CONTRACT_BALANCE - TOTAL_DISTRIBUTION).to.equal(CONTRACT_REMAINING);
+            expect(CONTRACT_BALANCE).to.equal(TOTAL_DISTRIBUTION); // Contract має рівно стільки, скільки розподіляється
         });
     });
     
@@ -254,9 +257,21 @@ describe("KCY1 Token - REAL Distribution Testing (Different Wallets)", function(
             await testToken.distributeInitialAllocations();
             
             // Marketing allocation should NOT be transferred (same wallet)
-            // So dev wallet should have: 600,000 - 200,000 - 150,000 = 250,000
+            // Dev wallet stays at 96M (unchanged)
+            // Team gets 1M from contract
+            // Advisor gets 1.5M from contract
             const devBalance = await testToken.balanceOf(devWallet.address);
-            expect(devBalance).to.equal(ethers.parseEther("250000"));
+            expect(devBalance).to.equal(ethers.parseEther("96000000"));
+            
+            const teamBalance = await testToken.balanceOf(teamWallet.address);
+            expect(teamBalance).to.equal(ethers.parseEther("1000000"));
+            
+            const advisorBalance = await testToken.balanceOf(advisorWallet.address);
+            expect(advisorBalance).to.equal(ethers.parseEther("1500000"));
+            
+            // Contract should have 1.5M left (4M - 1M - 1.5M)
+            const contractBalance = await testToken.balanceOf(await testToken.getAddress());
+            expect(contractBalance).to.equal(ethers.parseEther("1500000"));
         });
         
         it("Should handle case where all wallets are same as dev wallet", async function() {
@@ -271,9 +286,13 @@ describe("KCY1 Token - REAL Distribution Testing (Different Wallets)", function(
             
             await testToken.distributeInitialAllocations();
             
-            // No transfers should occur, balance should remain 600,000
+            // No transfers should occur, Dev balance should remain 96M
             const devBalance = await testToken.balanceOf(devWallet.address);
             expect(devBalance).to.equal(DEV_INITIAL_BALANCE);
+            
+            // Contract should still have all 4M
+            const contractBalance = await testToken.balanceOf(await testToken.getAddress());
+            expect(contractBalance).to.equal(CONTRACT_BALANCE);
         });
     });
 });
