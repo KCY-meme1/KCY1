@@ -508,6 +508,43 @@ describe("KCY1 Token v29 - Complete Test Suite", function() {
                 token.setLiquidityPair(addr4.address, true)
             ).to.be.revertedWith("Pairs locked");
         });
+		
+		it("10.5 Should block normal users from removing liquidity (alternative)", async function() {
+			await time.increase(TRADING_LOCK + 1);
+			
+			const pairAddr = addr3.address;
+			await token.setLiquidityPair(pairAddr, true);
+			
+			// Make pair an exempt slot temporarily to send it tokens
+			await token.updateExemptSlots([pairAddr, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			await token.transfer(pairAddr, ethers.parseEther("1000"));
+			
+			// Remove pair from exempt slots (now it's just a liquidity pair, not exempt)
+			await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			
+			// Give addr1 some tokens
+			await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			await token.transfer(addr1.address, ethers.parseEther("500"));
+			await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			
+			// Now test: pair tries to send to normal user (simulating liquidity removal)
+			// We need to impersonate pair to test this
+			await ethers.provider.send("hardhat_impersonateAccount", [pairAddr]);
+			const pairSigner = await ethers.getSigner(pairAddr);
+			
+			// Fund pair with ETH
+			await owner.sendTransaction({
+				to: pairAddr,
+				value: ethers.parseEther("1.0")
+			});
+			
+			// Pair tries to send to addr1 - should fail because msg.sender (pair) is not router
+			await expect(
+				token.connect(pairSigner).transfer(addr1.address, ethers.parseEther("100"))
+			).to.be.revertedWith("Normal users cannot remove liquidity directly");
+			
+			await ethers.provider.send("hardhat_stopImpersonatingAccount", [pairAddr]);
+		});
     });
     
     describe("11. Security & Edge Cases", function() {

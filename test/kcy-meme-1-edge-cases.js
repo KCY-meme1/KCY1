@@ -337,27 +337,38 @@ describe("KCY1 Token v30 - Edge Cases", function() {
         });
         
         it("7.3 Should block normal user from removing liquidity", async function() {
-            const pairAddr = addr3.address;
-            await token.setLiquidityPair(pairAddr, true);
-            
-            // Send tokens to pair (owner can send to pair as exempt)
-            await token.transfer(pairAddr, ethers.parseEther("1000"));
-            
-            // Try to simulate pair giving approval - but pair is just an address, not a contract
-            // This test needs to be adjusted - we can't make pair.approve() work
-            // Instead, test that normal user can't transfer FROM pair
-            
-            // Give addr1 some tokens
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
-            await token.transfer(addr1.address, ethers.parseEther("500"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
-            
-            // Normal user tries to send from pair to themselves (simulating liquidity removal)
-            // Note: This will fail differently because we can't actually set up approval from pair
-            // The real check happens in the contract: isLiquidityPair[from] check
-            // Skip this test as it requires a real liquidity pair contract
-            this.skip();
-        });
+			const pairAddr = addr3.address;
+			await token.setLiquidityPair(pairAddr, true);
+			
+			// Owner sends tokens to pair (exempt to pair = allowed)
+			await token.transfer(pairAddr, ethers.parseEther("1000"));
+			
+			// Give addr1 some tokens to work with
+			await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			await token.transfer(addr1.address, ethers.parseEther("500"));
+			await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			
+			// Create approval from pair to addr1 using impersonation
+			await ethers.provider.send("hardhat_impersonateAccount", [pairAddr]);
+			const pairSigner = await ethers.getSigner(pairAddr);
+			
+			// Fund the pair address with ETH for gas
+			await owner.sendTransaction({
+				to: pairAddr,
+				value: ethers.parseEther("1.0")
+			});
+			
+			// Pair approves addr1 to spend tokens
+			await token.connect(pairSigner).approve(addr1.address, ethers.parseEther("100"));
+			
+			// Now addr1 tries to transferFrom pair to themselves (simulating liquidity removal)
+			// This should fail because addr1 is not the router
+			await expect(
+				token.connect(addr1).transferFrom(pairAddr, addr1.address, ethers.parseEther("100"))
+			).to.be.revertedWith("Normal users cannot remove liquidity directly");
+			
+			await ethers.provider.send("hardhat_stopImpersonatingAccount", [pairAddr]);
+		});
     });
     
     describe("8. Blacklist + Pause Combinations", function() {

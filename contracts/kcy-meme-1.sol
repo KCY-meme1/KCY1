@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY-meme-1 Token (KCY1) - v29
+ * @title KCY-meme-1 Token (KCY1) - v31
  * @dev Complete rules:
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
@@ -33,11 +33,18 @@ pragma solidity ^0.8.20;
  *        - Liquidity Pairs: CAN be locked forever
  * 
  *      DEPLOYMENT:
+ *        - Total Supply: 100,000,000 tokens
+ *        - DEV Wallet: 96,000,000 tokens (for liquidity + reserve)
+ *        - Contract: 4,000,000 tokens (for distribution)
+ *        - After distribution:
+ *          • Marketing: 1,500,000
+ *          • Team: 1,000,000
+ *          • Advisor: 1,500,000
  *        - Hardhat (chainid 31337): Deployer gets tokens
  *        - BSC Testnet (chainid 97): Testnet wallets
  *        - BSC Mainnet (chainid 56): Real wallets
  * 
- * @author Production Version - v29
+ * @author Production Version - v31
  */
 
 interface IERC20 {
@@ -88,10 +95,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     address private immutable Tw_trz_hdn;
     address private immutable Aw_trzV;
     
-    uint256 private constant Mrkt_alloc = 150_000 * 10**18;
-    uint256 private constant T_alloc = 200_000 * 10**18;
-    uint256 private constant Adv_alloc = 150_000 * 10**18;
-    uint256 private constant Tot_dist = 500_000 * 10**18;
+    uint256 private constant Mrkt_alloc = 1_500_000 * 10**18;
+    uint256 private constant T_alloc = 1_000_000 * 10**18;
+    uint256 private constant Adv_alloc = 1_500_000 * 10**18;
+    uint256 private constant Tot_dist = 4_000_000 * 10**18;
     
     bool public initialDistributionCompleted;
     
@@ -164,7 +171,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     constructor() {
         owner = msg.sender;
         tradingEnabledTime = block.timestamp + 48 hours;
-        totalSupply = 1_000_000 * 10**decimals;
+        totalSupply = 100_000_000 * 10**decimals;
         
         // Detect network: Hardhat (31337) or BSC Testnet (97)
         isTestnet = block.chainid == 97 || block.chainid == 31337;
@@ -185,42 +192,42 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         pncswpRouter = block.chainid == 97 ? 0xD99D1c33F9fC3444f8101754aBC46c52416550D1 : 0x10ED43C718714eb63d5aA57B78B54704E256024E;
         pncswpFactory = block.chainid == 97 ? 0x6725F303b657a9451d8BA641348b6761A6CC7a17 : 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
         
-        balanceOf[DEVw_mv] = 600_000 * 10**decimals;
-        balanceOf[address(this)] = 400_000 * 10**decimals;
+        balanceOf[DEVw_mv] = 96_000_000 * 10**decimals;
+        balanceOf[address(this)] = 4_000_000 * 10**decimals;
         
         eAddr1 = address(0);
         eAddr2 = address(0);
         eAddr3 = address(0);
         eAddr4 = address(0);
         
-        emit Transfer(address(0), DEVw_mv, 600_000 * 10**decimals);
-        emit Transfer(address(0), address(this), 400_000 * 10**decimals);
+        emit Transfer(address(0), DEVw_mv, 96_000_000 * 10**decimals);
+        emit Transfer(address(0), address(this), 4_000_000 * 10**decimals);
     }
     
     function distributeInitialAllocations() external onlyOwner {
         require(!initialDistributionCompleted, "Dist completed");
-        require(balanceOf[DEVw_mv] >= Tot_dist, "Dw balance low");
+        require(balanceOf[address(this)] >= Tot_dist, "Contract balance low");
         
         initialDistributionCompleted = true;
         
         if (Mw_tng != address(0) && Mw_tng != DEVw_mv && Mrkt_alloc > 0) {
-            balanceOf[DEVw_mv] -= Mrkt_alloc;
+            balanceOf[address(this)] -= Mrkt_alloc;
             balanceOf[Mw_tng] += Mrkt_alloc;
-            emit Transfer(DEVw_mv, Mw_tng, Mrkt_alloc);
+            emit Transfer(address(this), Mw_tng, Mrkt_alloc);
             emit DistributionSent(Mw_tng, Mrkt_alloc);
         }
         
         if (Tw_trz_hdn != address(0) && Tw_trz_hdn != DEVw_mv && T_alloc > 0) {
-            balanceOf[DEVw_mv] -= T_alloc;
+            balanceOf[address(this)] -= T_alloc;
             balanceOf[Tw_trz_hdn] += T_alloc;
-            emit Transfer(DEVw_mv, Tw_trz_hdn, T_alloc);
+            emit Transfer(address(this), Tw_trz_hdn, T_alloc);
             emit DistributionSent(Tw_trz_hdn, T_alloc);
         }
         
         if (Aw_trzV != address(0) && Aw_trzV != DEVw_mv && Adv_alloc > 0) {
-            balanceOf[DEVw_mv] -= Adv_alloc;
+            balanceOf[address(this)] -= Adv_alloc;
             balanceOf[Aw_trzV] += Adv_alloc;
-            emit Transfer(DEVw_mv, Aw_trzV, Adv_alloc);
+            emit Transfer(address(this), Aw_trzV, Adv_alloc);
             emit DistributionSent(Aw_trzV, Adv_alloc);
         }
         
