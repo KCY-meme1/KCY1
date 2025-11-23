@@ -1,4 +1,4 @@
-// KCY1 Token v30 - Edge Case Tests
+// KCY1 Token v33 - Edge Case Tests
 // Additional edge case testing - does NOT modify contract functionality
 // Use with Hardhat: npx hardhat test test/kcy-meme-1-edge-cases.js
 
@@ -6,16 +6,17 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KCY1 Token v30 - Edge Cases", function() {
+describe("KCY1 Token v33 - Edge Cases", function() {
     let token;
     let owner, addr1, addr2, addr3, exemptAddr1, exemptAddr2;
+    let addr4, addr5; // Additional addresses for tests that need fresh addresses
     
     const TRADING_LOCK = 48 * 60 * 60;
     const COOLDOWN = 2 * 60 * 60;
     const EXEMPT_TO_NORMAL_COOLDOWN = 24 * 60 * 60;
     
     beforeEach(async function() {
-        [owner, addr1, addr2, addr3, exemptAddr1, exemptAddr2] = await ethers.getSigners();
+        [owner, addr1, addr2, addr3, exemptAddr1, exemptAddr2, addr4, addr5] = await ethers.getSigners();
         
         const KCY1Token = await ethers.getContractFactory("KCY1Token");
         token = await KCY1Token.deploy();
@@ -164,15 +165,18 @@ describe("KCY1 Token v30 - Edge Cases", function() {
         });
         
         it("3.4 Should succeed exactly at 24 hour exempt→normal cooldown", async function() {
+            // Setup: exemptAddr1 as sender
             await token.updateExemptSlots([exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
             await token.transfer(exemptAddr1.address, ethers.parseEther("500"));
             
-            await token.connect(exemptAddr1).transfer(addr1.address, ethers.parseEther("50"));
+            // First exempt→normal transfer (exemptAddr1 → addr4 who is completely fresh)
+            await token.connect(exemptAddr1).transfer(addr4.address, ethers.parseEther("50"));
             
             await time.increase(EXEMPT_TO_NORMAL_COOLDOWN); // Exactly 24 hours
             
-            await token.connect(exemptAddr1).transfer(addr2.address, ethers.parseEther("50"));
-            expect(Number(await token.balanceOf(addr2.address))).to.be.greaterThan(0);
+            // Second exempt→normal transfer should succeed (exemptAddr1 → addr5 also completely fresh)
+            await token.connect(exemptAddr1).transfer(addr5.address, ethers.parseEther("50"));
+            expect(Number(await token.balanceOf(addr5.address))).to.be.greaterThan(0);
         });
     });
     

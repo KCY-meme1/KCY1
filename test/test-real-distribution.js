@@ -1,10 +1,10 @@
-// KCY1 Token v31 - Real Distribution Testing with Different Addresses (100M Supply)
+// KCY1 Token v33 - Real Distribution Testing with Different Addresses (100M Supply)
 // This test uses MockKCY1Distribution to test REAL distribution behavior
 
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("KCY1 Token v31 - REAL Distribution Testing (100M Supply)", function() {
+describe("KCY1 Token v33 - REAL Distribution Testing (100M Supply)", function() {
     let mockToken;
     let owner;
     let devWallet, marketingWallet, teamWallet, advisorWallet;

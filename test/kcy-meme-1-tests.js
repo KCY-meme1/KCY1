@@ -1,4 +1,5 @@
-// KCY1 Token (KCY-meme-1) v31 - Complete Test Suite (100M Supply)
+// KCY1 Token (KCY-meme-1) v33 - Complete Test Suite (100M Supply)
+// MINIMAL CHANGES VERSION - Only updated limits (2000/4000)
 // Tests all critical fixes and functionality
 // Use with Hardhat: npx hardhat test
 
@@ -6,7 +7,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KCY1 Token v31 - Complete Test Suite (100M Supply)", function() {
+describe("KCY1 Token v33 - Complete Test Suite (100M Supply) - MINIMAL", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
@@ -16,8 +17,8 @@ describe("KCY1 Token v31 - Complete Test Suite (100M Supply)", function() {
     const TOTAL_SUPPLY = ethers.parseEther("100000000");
     const DEV_WALLET_BALANCE = ethers.parseEther("96000000");
     const CONTRACT_BALANCE = ethers.parseEther("4000000");
-    const MAX_TX = ethers.parseEther("1000");
-    const MAX_WALLET = ethers.parseEther("20000");
+    const MAX_TX = ethers.parseEther("2000");
+    const MAX_WALLET = ethers.parseEther("4000");
     const MAX_EXEMPT_TO_NORMAL = ethers.parseEther("100");
     const COOLDOWN = 2 * 60 * 60;
     const EXEMPT_TO_NORMAL_COOLDOWN = 24 * 60 * 60;
@@ -372,26 +373,26 @@ describe("KCY1 Token v31 - Complete Test Suite (100M Supply)", function() {
             );
         });
         
-        it("8.1 Should enforce max transaction limit (1,000 tokens)", async function() {
+        it("8.1 Should enforce max transaction limit (2,000 tokens)", async function() {
             await token.connect(addr1).transfer(addr2.address, MAX_TX);
             
             await time.increase(COOLDOWN + 1);
             await expect(
-                token.connect(addr1).transfer(addr3.address, ethers.parseEther("1001"))
-            ).to.be.revertedWith("Max 1000");
+                token.connect(addr1).transfer(addr3.address, ethers.parseEther("2001"))
+            ).to.be.revertedWith("Max 2000");
         });
         
-        it("8.2 Should enforce max wallet limit (20,000 tokens)", async function() {
+        it("8.2 Should enforce max wallet limit (4,000 tokens)", async function() {
             const amountPerTransfer = ethers.parseEther("1000");
             
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 4; i++) {
                 await token.connect(addr1).transfer(addr2.address, amountPerTransfer);
                 await time.increase(COOLDOWN + 1);
             }
             
             await expect(
                 token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
-            ).to.be.revertedWith("Max wallet 20k");
+            ).to.be.revertedWith("Max wallet 4k");
         });
         
         it("8.3 Should enforce 2-hour cooldown between transfers", async function() {

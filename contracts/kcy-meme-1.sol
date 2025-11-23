@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title KCY-meme-1 Token (KCY1) - v31
+ * @title KCY-meme-1 Token (KCY1) - v33
  * @dev Complete rules:
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
@@ -13,9 +13,9 @@ pragma solidity ^0.8.20;
  *        ✓ Can trade (buy/sell) through Router
  *        ✗ CANNOT add/remove liquidity directly to Pair
  *        ✓ 0.08% fees on all transactions
- *        ✓ 1,000 token max per transaction
+ *        ✓ 2,000 token max per transaction
  *        ✓ 2 hour cooldown
- *        ✓ 20,000 token max wallet
+ *        ✓ 4,000 token max wallet
  *      
  *      EXEMPT (4 slots) ↔ EXEMPT/Router/Factory:
  *        ✓ NO fees (0%)
@@ -44,7 +44,7 @@ pragma solidity ^0.8.20;
  *        - BSC Testnet (chainid 97): Testnet wallets
  *        - BSC Mainnet (chainid 56): Real wallets
  * 
- * @author Production Version - v31
+ * @author Production Version - v33
  */
 
 interface IERC20 {
@@ -106,8 +106,8 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     uint256 public constant OWNER_FEE = 50;
     uint256 public constant FEE_DENOMINATOR = 100000;
     
-    uint256 public constant MAX_TRANSACTION = 1000 * 10**18;
-    uint256 public constant MAX_WALLET = 20000 * 10**18;
+    uint256 public constant MAX_TRANSACTION = 2000 * 10**18;
+    uint256 public constant MAX_WALLET = 4000 * 10**18;
     uint256 public constant COOLDOWN_PERIOD = 2 hours;
     uint256 public constant PAUSE_DURATION = 48 hours;
     
@@ -396,17 +396,17 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             uint256 recipientBalance = balanceOf[to];
             require(
                 recipientBalance + amount <= MAX_WALLET,
-                "Max wallet 20k"
+                "Max wallet 4k"
             );
         }
         else if (isNormalTransaction) {
-            require(amount <= MAX_TRANSACTION, "Max 1000");
+            require(amount <= MAX_TRANSACTION, "Max 2000");
             
             if (!toExempt) {
                 uint256 recipientBalance = balanceOf[to];
                 require(
                     recipientBalance + amount <= MAX_WALLET,
-                    "Max wallet 20k"
+                    "Max wallet 4k"
                 );
             }
             
