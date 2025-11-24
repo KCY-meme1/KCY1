@@ -1,41 +1,10 @@
 {
-  "name": "kcy1-token",
-  "version": "29.0.0",
-  "description": "KCY-meme-1 Token (KCY1) v29 - Complete Smart Contract with Tests",
-  "scripts": {
-    "test": "hardhat test",
-    "compile": "hardhat compile",
-    "clean": "hardhat clean",
-    "node": "hardhat node",
-    "deploy:local": "hardhat run scripts/deploy.js --network hardhat",
-    "deploy:testnet": "hardhat run scripts/deploy.js --network bscTestnet",
-    "deploy:mainnet": "hardhat run scripts/deploy.js --network bscMainnet"
-  },
-  "keywords": [
-    "solidity",
-    "ethereum",
-    "smart-contracts",
-    "hardhat",
-    "bsc",
-    "token"
-  ],
-  "author": "KCY Team",
-  "license": "MIT",
+  "name": "kcy-meme-1-token",
+  "version": "33.0.0",
   "devDependencies": {
-    "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
-    "@nomicfoundation/hardhat-ethers": "^3.0.0",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
-    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
     "@nomicfoundation/hardhat-verify": "^2.0.0",
-    "@typechain/ethers-v6": "^0.5.0",
-    "@typechain/hardhat": "^9.0.0",
-    "@types/chai": "^4.3.0",
-    "@types/mocha": "^10.0.0",
-    "chai": "^4.3.0",
-    "ethers": "^6.4.0",
-    "hardhat": "^2.19.0",
-    "hardhat-gas-reporter": "^1.0.9",
-    "solidity-coverage": "^0.8.0",
-    "typechain": "^8.3.0"
+    "dotenv": "^16.6.1",
+    "hardhat": "^2.19.0"
   }
 }
