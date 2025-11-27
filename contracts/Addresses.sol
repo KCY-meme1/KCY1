@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 /**
+ * version v37
  * @title Addresses
- * @version v37
  * @dev ЕДИНСТВЕН ФАЙЛ С ВСИЧКИ АДРЕСИ
  * Използва се И от Solidity И от JavaScript
  * 

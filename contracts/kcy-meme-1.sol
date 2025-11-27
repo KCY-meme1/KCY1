@@ -4,8 +4,8 @@ pragma solidity ^0.8.20;
 import "./Addresses.sol";
 
 /**
+ * version v37
  * @title KCY-meme-1 Token (KCY1)
- * @version v37
  * @dev Адресите се взимат от Addresses.sol - ЕДИН ФАЙЛ ЗА ВСИЧКО!
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
@@ -59,7 +59,7 @@ import "./Addresses.sol";
  *        - Testnet: 0xCBfA..., 0x67eD..., 0xD1a7..., etc.
  *        - Mainnet: 0x567c..., 0x58ec..., 0x6300..., 0x8d95...
  * 
- * @author Production Version - v35
+ * @author VMK
  */
 
 interface IERC20 {
@@ -218,30 +218,24 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         // From Addresses.sol
         // ===================================================
         if (block.chainid == 31337) {
-            exemptSlots[0] = msg.sender;  // DEV
-            exemptSlots[1] = msg.sender;  // Marketing
-            exemptSlots[2] = msg.sender;  // Team
-            exemptSlots[3] = msg.sender;  // Advisor
+            eAddr1 = msg.sender;  // DEV
+            eAddr2 = msg.sender;  // Marketing
+            eAddr3 = msg.sender;  // Team
+            eAddr4 = msg.sender;  // Advisor
         } else if (block.chainid == 97) {
-            exemptSlots[0] = Addresses.TESTNET_DEV;
-            exemptSlots[1] = Addresses.TESTNET_MARKETING;
-            exemptSlots[2] = Addresses.TESTNET_TEAM;
-            exemptSlots[3] = Addresses.TESTNET_ADVISOR;
+            eAddr1 = Addresses.TESTNET_DEV;
+            eAddr2 = Addresses.TESTNET_MARKETING;
+            eAddr3 = Addresses.TESTNET_TEAM;
+            eAddr4 = Addresses.TESTNET_ADVISOR;
         } else {
-            exemptSlots[0] = Addresses.MAINNET_DEV;
-            exemptSlots[1] = Addresses.MAINNET_MARKETING;
-            exemptSlots[2] = Addresses.MAINNET_TEAM;
-            exemptSlots[3] = Addresses.MAINNET_ADVISOR;
+            eAddr1 = Addresses.MAINNET_DEV;
+            eAddr2 = Addresses.MAINNET_MARKETING;
+            eAddr3 = Addresses.MAINNET_TEAM;
+            eAddr4 = Addresses.MAINNET_ADVISOR;
         }
         
         balanceOf[DEVw_mv] = 96_000_000 * 10**decimals;
         balanceOf[address(this)] = 4_000_000 * 10**decimals;
-        
-        // Exempt slots = Distribution addresses (NO fees, NO limits)
-        eAddr1 = DEVw_mv;      // Same as DEV wallet
-        eAddr2 = Mw_tng;       // Same as Marketing wallet
-        eAddr3 = Tw_trz_hdn;   // Same as Team wallet
-        eAddr4 = Aw_trzV;      // Same as Advisor wallet
         
         emit Transfer(address(0), DEVw_mv, 96_000_000 * 10**decimals);
         emit Transfer(address(0), address(this), 4_000_000 * 10**decimals);
