@@ -1,3 +1,7 @@
+/**
+ * @version v34
+ */
+
 const hre = require("hardhat");
 
 async function main() {

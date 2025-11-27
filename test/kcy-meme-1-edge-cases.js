@@ -1,3 +1,7 @@
+/**
+ * @version v34
+ */
+
 // KCY1 Token v33 - Edge Case Tests
 // Additional edge case testing - does NOT modify contract functionality
 // Use with Hardhat: npx hardhat test test/kcy-meme-1-edge-cases.js

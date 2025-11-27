@@ -1,3 +1,7 @@
+/**
+ * @version v34
+ */
+
 // KCY1 Token (KCY-meme-1) v33 - Complete Test Suite (100M Supply)
 // MINIMAL CHANGES VERSION - Only updated limits (2000/4000)
 // Tests all critical fixes and functionality

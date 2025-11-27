@@ -1,3 +1,7 @@
+/**
+ * @version v34
+ */
+
 // KCY1 Token v33 - Real Distribution Testing with Different Addresses (100M Supply)
 // This test uses MockKCY1Distribution to test REAL distribution behavior
 

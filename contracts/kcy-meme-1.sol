@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "./Addresses.sol";
+
 /**
- * @title KCY-meme-1 Token (KCY1) - v33
- * @dev Complete rules:
+ * @title KCY-meme-1 Token (KCY1)
+ * @version v37
+ * @dev Адресите се взимат от Addresses.sol - ЕДИН ФАЙЛ ЗА ВСИЧКО!
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
  *      - Applied when at least one party is normal user
@@ -44,7 +47,19 @@ pragma solidity ^0.8.20;
  *        - BSC Testnet (chainid 97): Testnet wallets
  *        - BSC Mainnet (chainid 56): Real wallets
  * 
- * @author Production Version - v33
+ *      EXEMPT SLOTS:
+ *        - Automatically set to distribution addresses
+ *        - eAddr1 = DEV wallet
+ *        - eAddr2 = Marketing wallet
+ *        - eAddr3 = Team wallet
+ *        - eAddr4 = Advisor wallet
+ * 
+ *      ADDRESSES (hardcoded in constructor):
+ *        See config/addresses.js for reference
+ *        - Testnet: 0xCBfA..., 0x67eD..., 0xD1a7..., etc.
+ *        - Mainnet: 0x567c..., 0x58ec..., 0x6300..., 0x8d95...
+ * 
+ * @author Production Version - v35
  */
 
 interface IERC20 {
@@ -176,29 +191,57 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         // Detect network: Hardhat (31337) or BSC Testnet (97)
         isTestnet = block.chainid == 97 || block.chainid == 31337;
         
-        // Use ternary operators for immutable variables
+        // ===================================================
+        // DISTRIBUTION ADDRESSES - From Addresses.sol
+        // Generated from config/addresses.js
+        // ===================================================
         DEVw_mv = block.chainid == 31337 ? msg.sender : 
-                  (block.chainid == 97 ? 0xCBfA2d3612b7474fF89c0746Ea6bAEee06A61702 : 0x567c1c5e9026E04078F9b92DcF295A58355f60c7);
+                  (block.chainid == 97 ? Addresses.TESTNET_DEV : Addresses.MAINNET_DEV);
         
         Mw_tng = block.chainid == 31337 ? msg.sender :
-                 (block.chainid == 97 ? 0x67eDbe18Ad6AB1ff0D57CCc511F56485EfFcabE7 : 0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A);
+                 (block.chainid == 97 ? Addresses.TESTNET_MARKETING : Addresses.MAINNET_MARKETING);
         
         Tw_trz_hdn = block.chainid == 31337 ? msg.sender :
-                     (block.chainid == 97 ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x6300811567bed7d69B5AC271060a7E298f99fddd);
+                     (block.chainid == 97 ? Addresses.TESTNET_TEAM : Addresses.MAINNET_TEAM);
         
         Aw_trzV = block.chainid == 31337 ? msg.sender :
-                  (block.chainid == 97 ? 0xD1a7281FB1D1745C29Dfed9C1Af22b67a7403Dd6 : 0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87);
+                  (block.chainid == 97 ? Addresses.TESTNET_ADVISOR : Addresses.MAINNET_ADVISOR);
         
-        pncswpRouter = block.chainid == 97 ? 0xD99D1c33F9fC3444f8101754aBC46c52416550D1 : 0x10ED43C718714eb63d5aA57B78B54704E256024E;
-        pncswpFactory = block.chainid == 97 ? 0x6725F303b657a9451d8BA641348b6761A6CC7a17 : 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
+        // ===================================================
+        // DEX ADDRESSES - From Addresses.sol
+        // ===================================================
+        pncswpRouter = block.chainid == 97 ? Addresses.TESTNET_ROUTER : Addresses.MAINNET_ROUTER;
+        pncswpFactory = block.chainid == 97 ? Addresses.TESTNET_FACTORY : Addresses.MAINNET_FACTORY;
+        
+        // ===================================================
+        // EXEMPT SLOTS - Same as distribution addresses
+        // From Addresses.sol
+        // ===================================================
+        if (block.chainid == 31337) {
+            exemptSlots[0] = msg.sender;  // DEV
+            exemptSlots[1] = msg.sender;  // Marketing
+            exemptSlots[2] = msg.sender;  // Team
+            exemptSlots[3] = msg.sender;  // Advisor
+        } else if (block.chainid == 97) {
+            exemptSlots[0] = Addresses.TESTNET_DEV;
+            exemptSlots[1] = Addresses.TESTNET_MARKETING;
+            exemptSlots[2] = Addresses.TESTNET_TEAM;
+            exemptSlots[3] = Addresses.TESTNET_ADVISOR;
+        } else {
+            exemptSlots[0] = Addresses.MAINNET_DEV;
+            exemptSlots[1] = Addresses.MAINNET_MARKETING;
+            exemptSlots[2] = Addresses.MAINNET_TEAM;
+            exemptSlots[3] = Addresses.MAINNET_ADVISOR;
+        }
         
         balanceOf[DEVw_mv] = 96_000_000 * 10**decimals;
         balanceOf[address(this)] = 4_000_000 * 10**decimals;
         
-        eAddr1 = address(0);
-        eAddr2 = address(0);
-        eAddr3 = address(0);
-        eAddr4 = address(0);
+        // Exempt slots = Distribution addresses (NO fees, NO limits)
+        eAddr1 = DEVw_mv;      // Same as DEV wallet
+        eAddr2 = Mw_tng;       // Same as Marketing wallet
+        eAddr3 = Tw_trz_hdn;   // Same as Team wallet
+        eAddr4 = Aw_trzV;      // Same as Advisor wallet
         
         emit Transfer(address(0), DEVw_mv, 96_000_000 * 10**decimals);
         emit Transfer(address(0), address(this), 4_000_000 * 10**decimals);

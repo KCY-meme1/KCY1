@@ -1,11 +1,18 @@
+/**
+ * @version v34
+ */
+
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
+const addresses = require("../config/addresses");
 
-// Адресите са прости string константи
-const DEV_WALLET_mm_vis = "0x567c1c5e9026E04078F9b92DcF295A58355f60c7";
-const MARKETING_WALLET_tng = "0x58ec63d31b8e4D6624B5c88338027a54Be1AE28A";
-const TEAM_WALLET_trz_hdn = "0x6300811567bed7d69B5AC271060a7E298f99fddd";
-const ADVISOR_WALLET_trz_vis = "0x8d95d56436Eb58ee3f9209e8cc4BfD59cfBE8b87";
+// Използваме централизираните адреси от config/addresses.js
+// За BSC Mainnet (както е дефинирано в контракта при chainId 56)
+const MAINNET_ADDRESSES = addresses.bscMainnet.distribution;
+const DEV_WALLET_mm_vis = MAINNET_ADDRESSES.dev;
+const MARKETING_WALLET_tng = MAINNET_ADDRESSES.marketing;
+const TEAM_WALLET_trz_hdn = MAINNET_ADDRESSES.team;
+const ADVISOR_WALLET_trz_vis = MAINNET_ADDRESSES.advisor;
 
 describe("KCY1 Token - Detailed Distribution Tests", function () {
   let token;
