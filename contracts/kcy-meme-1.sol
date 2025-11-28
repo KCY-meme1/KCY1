@@ -4,8 +4,10 @@ pragma solidity ^0.8.20;
 import "./Addresses.sol";
 
 /**
- * version v37
- * @title KCY-meme-1 Token (KCY1)
+ * @version v37
+ */
+// KCY1 Token (KCY-meme-1)
+/**
  * @dev Адресите се взимат от Addresses.sol - ЕДИН ФАЙЛ ЗА ВСИЧКО!
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
@@ -400,6 +402,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         bool fromExempt = isExemptAddress(from);
         bool toExempt = isExemptAddress(to);
         bool fromExemptSlot = isExemptSlot(from);
+        bool isRouterOrFactory = (from == pncswpRouter || from == pncswpFactory);
         
         if (!fromExempt && isLiquidityPair[to]) {
             revert("Normal users cannot add liquidity directly");
@@ -453,6 +456,18 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                     recipientBalance + amount <= MAX_WALLET,
                     "Max wallet 4k"
                 );
+                
+                // 2h Cooldown check for recipient ONLY when sender is Router/Factory
+                // Exempt Slots have their own 24h cooldown check
+                if (isRouterOrFactory) {
+                    uint256 lastRx = lastTransactionTime[to];
+                    if (lastRx != 0) {
+                        require(
+                            block.timestamp >= lastRx + COOLDOWN_PERIOD,
+                            "Wait 2h"
+                        );
+                    }
+                }
             }
             
             if (!fromExempt) {
@@ -492,6 +507,11 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         
         if (!fromExempt) {
             lastTransactionTime[from] = block.timestamp;
+        }
+        
+        // Update recipient's lastTransactionTime only for Router/Factory transactions
+        if (!toExempt && isNormalTransaction && isRouterOrFactory) {
+            lastTransactionTime[to] = block.timestamp;
         }
         
         if (isExemptSlotToNormal) {

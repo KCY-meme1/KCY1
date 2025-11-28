@@ -1,8 +1,7 @@
 /**
- * @version v34
+ * @version v37
  */
-
-// KCY1 Token (KCY-meme-1) v33 - Complete Test Suite (100M Supply)
+// KCY1 Token (KCY-meme-1) - Complete Test Suite (100M Supply)
 // MINIMAL CHANGES VERSION - Only updated limits (2000/4000)
 // Tests all critical fixes and functionality
 // Use with Hardhat: npx hardhat test
@@ -11,7 +10,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KCY1 Token v33 - Complete Test Suite (100M Supply) - MINIMAL", function() {
+describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
@@ -77,15 +76,16 @@ describe("KCY1 Token v33 - Complete Test Suite (100M Supply) - MINIMAL", functio
         });
         
         it("1.7 Should start with empty exempt slots (4 slots)", async function() {
-			const exempts = await token.getExemptAddresses();
-			const [owner] = await ethers.getSigners();
-			
-			// В Hardhat всички exempt slots са owner
-			expect(exempts.slots[0]).to.equal(owner.address);
-			expect(exempts.slots[1]).to.equal(owner.address);
-			expect(exempts.slots[2]).to.equal(owner.address);
-			expect(exempts.slots[3]).to.equal(owner.address);
-		});
+            const exempts = await token.getExemptAddresses();
+            const [owner] = await ethers.getSigners();
+            
+            // In Hardhat, all exempt slots are set to owner for simplified testing
+            expect(exempts.slots[0]).to.equal(owner.address);
+            expect(exempts.slots[1]).to.equal(owner.address);
+            expect(exempts.slots[2]).to.equal(owner.address);
+            expect(exempts.slots[3]).to.equal(owner.address);
+            expect(exempts.slotsLocked).to.equal(false);
+        });
     });
     
     describe("2. Initial Distribution", function() {
@@ -612,6 +612,162 @@ describe("KCY1 Token v33 - Complete Test Suite (100M Supply) - MINIMAL", functio
             
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
             expect(Number(await token.balanceOf(addr2.address))).to.be.greaterThan(0);
+        });
+    });
+    
+    describe("13. CRITICAL Missing Test Coverage", function() {
+        it("13.1 Should allow Router to send tokens to normal user (2000 max per tx)", async function() {
+            // Skip trading lock
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Set addr1 as Router (exempt but NOT exempt slot)
+            await token.updateDEXAddresses(addr1.address, addr2.address);
+            
+            // Verify Router is exempt but not in slot
+            expect(await token.isExemptAddress(addr1.address)).to.equal(true);
+            expect(await token.isExemptSlot(addr1.address)).to.equal(false);
+            
+            // Owner → Router (both exempt, NO limits, NO fees)
+            await token.transfer(addr1.address, ethers.parseEther("10000"));
+            
+            // Verify Router received full amount (no fees for exempt → exempt)
+            expect(await token.balanceOf(addr1.address)).to.equal(ethers.parseEther("10000"));
+            
+            // SCENARIO 1: Router → Normal has 2000 token limit per transaction
+            // AND 2h cooldown when sending to SAME user
+            // First transfer: 2000 tokens
+            await token.connect(addr1).transfer(addr3.address, ethers.parseEther("2000"));
+            
+            let balance = await token.balanceOf(addr3.address);
+            expect(balance).to.be.gt(ethers.parseEther("1990")); // After 0.08% fees
+            expect(balance).to.be.lt(ethers.parseEther("2000"));
+            
+            // Wait 2h cooldown before sending to SAME user again
+            await time.increase(COOLDOWN + 1);
+            
+            // Second transfer: another 2000 tokens to SAME user
+            await token.connect(addr1).transfer(addr3.address, ethers.parseEther("2000"));
+            
+            balance = await token.balanceOf(addr3.address);
+            expect(balance).to.be.gt(ethers.parseEther("3990")); // ~3996 after fees
+            expect(balance).to.be.lt(ethers.parseEther("4000")); // Max wallet reached!
+            
+            // SCENARIO 2: Router can send to multiple users without cooldown
+            await token.connect(addr1).transfer(addr4.address, ethers.parseEther("2000"));
+            await token.connect(addr1).transfer(addr5.address, ethers.parseEther("2000"));
+            
+            // Both users should have ~1998 tokens each
+            expect(await token.balanceOf(addr4.address)).to.be.closeTo(ethers.parseEther("1998"), ethers.parseEther("5"));
+            expect(await token.balanceOf(addr5.address)).to.be.closeTo(ethers.parseEther("1998"), ethers.parseEther("5"));
+        });
+        
+        it("13.2 Should apply 2h cooldown to Router → Same Normal user (but not different users)", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Set addr1 as Router
+            await token.updateDEXAddresses(addr1.address, addr2.address);
+            await token.transfer(addr1.address, ethers.parseEther("10000"));
+            
+            // First transfer to addr3
+            await token.connect(addr1).transfer(addr3.address, ethers.parseEther("100"));
+            
+            // Immediate second transfer to SAME user should fail
+            await expect(
+                token.connect(addr1).transfer(addr3.address, ethers.parseEther("100"))
+            ).to.be.revertedWith("Wait 2h");
+            
+            // But immediate transfer to DIFFERENT user should work
+            await token.connect(addr1).transfer(addr4.address, ethers.parseEther("100"));
+            
+            expect(await token.balanceOf(addr4.address)).to.be.gt(ethers.parseEther("99"));
+        });
+        
+        it("13.3 Should enforce 100 token limit on transferFrom from Exempt Slot to Normal", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Set addr1 as exempt slot
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            // Give exempt slot 1000 tokens
+            await token.transfer(addr1.address, ethers.parseEther("1000"));
+            
+            // Exempt slot approves addr2 (normal user) for 1000 tokens
+            await token.connect(addr1).approve(addr2.address, ethers.parseEther("1000"));
+            
+            // addr2 tries to transferFrom > 100 tokens from exempt slot to addr3 (NORMAL user)
+            // This should fail because: Exempt Slot → Normal has 100 token limit
+            await expect(
+                token.connect(addr2).transferFrom(addr1.address, addr3.address, ethers.parseEther("200"))
+            ).to.be.revertedWith("Max 100");
+            
+            // But 100 tokens should work
+            await token.connect(addr2).transferFrom(addr1.address, addr3.address, ethers.parseEther("100"));
+            
+            const balance = await token.balanceOf(addr3.address);
+            expect(balance).to.be.gt(ethers.parseEther("99"));
+            expect(balance).to.be.lt(ethers.parseEther("100"));
+        });
+        
+        it("13.4 Should allow multiple Normal users to fill Exempt Slot beyond 4k total", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Setup Router
+            await token.updateDEXAddresses(exemptAddr2.address, addr2.address);
+            
+            // Owner → Router (exempt to exempt, no fees, no limits)
+            await token.transfer(exemptAddr2.address, ethers.parseEther("10000"));
+            
+            // Router → Normal users (2000 max per transaction!)
+            // User 1 gets 4000 tokens (2x 2000 with 2h cooldown)
+            await token.connect(exemptAddr2).transfer(addr5.address, ethers.parseEther("2000"));
+            
+            // Wait 2h cooldown before sending to SAME user again
+            await time.increase(COOLDOWN + 1);
+            
+            await token.connect(exemptAddr2).transfer(addr5.address, ethers.parseEther("2000"));
+            
+            // User 2 gets 2000 tokens (1x 2000)
+            await token.connect(exemptAddr2).transfer(addr4.address, ethers.parseEther("2000"));
+            
+            // Normal users now have tokens:
+            // addr5: ~3996 tokens (2x 2000 after fees)
+            // addr4: ~1998 tokens (1x 2000 after fees)
+            
+            // Wait 2h cooldown for addr5 to be able to send (received from Router)
+            await time.increase(COOLDOWN + 1);
+            
+            // Set addr1 as exempt slot that will receive from normal users
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            // TRANSFER 1: Normal user 1 sends 2000 tokens to exempt slot
+            await token.connect(addr5).transfer(addr1.address, ethers.parseEther("2000"));
+            let balance1 = await token.balanceOf(addr1.address);
+            expect(balance1).to.be.closeTo(ethers.parseEther("1998"), ethers.parseEther("5"));
+            
+            // Wait 2h cooldown (only for same user)
+            await time.increase(COOLDOWN + 1);
+            
+            // TRANSFER 2: Normal user 1 sends remaining tokens to exempt slot
+            // Need to account for fees (0.08%) so subtract a bit
+            const addr5Balance = await token.balanceOf(addr5.address);
+            await token.connect(addr5).transfer(addr1.address, addr5Balance - ethers.parseEther("2"));
+            balance1 = await token.balanceOf(addr1.address);
+            expect(balance1).to.be.closeTo(ethers.parseEther("3994"), ethers.parseEther("10"));
+            
+            // TRANSFER 3: Normal user 2 sends tokens to exempt slot
+            // Need to wait 2h cooldown for addr4 (received from Router)
+            await time.increase(COOLDOWN + 1);
+            
+            // addr4 has ~1998 tokens, send all of them (accounting for fees)
+            const addr4Balance = await token.balanceOf(addr4.address);
+            await token.connect(addr4).transfer(addr1.address, addr4Balance - ethers.parseEther("2"));
+            
+            // VERIFY: Exempt slot has ~6000 tokens total
+            // (2000 + 2000 from user1) + (2000 from user2) ≈ 6000
+            // Each normal user has MAX 4k, but exempt slot can receive from MULTIPLE users
+            balance1 = await token.balanceOf(addr1.address);
+            expect(balance1).to.be.gt(ethers.parseEther("5000")); 
+            expect(balance1).to.be.closeTo(ethers.parseEther("5994"), ethers.parseEther("20"));
         });
     });
 });
