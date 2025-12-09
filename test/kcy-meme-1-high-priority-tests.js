@@ -240,11 +240,18 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             const contractBalance = await mockToken.balanceOf(await token.getAddress());
             expect(contractBalance).to.be.gt(ethers.parseEther("990")); // Allow for fees
             
+            const ownerBalanceBefore = await mockToken.balanceOf(owner.address);
+            
             // Rescue should work without reentrancy
             await token.rescueTokens(await mockToken.getAddress(), contractBalance);
             
             expect(await mockToken.balanceOf(await token.getAddress())).to.equal(0);
-            expect(await mockToken.balanceOf(owner.address)).to.be.gt(0);
+            
+            const ownerBalanceAfter = await mockToken.balanceOf(owner.address);
+            // Note: rescue also involves a transfer with fees (0.08%)
+            // So owner receives contractBalance - fees, not exactly contractBalance
+            const expectedReceived = (contractBalance * 99920n) / 100000n;
+            expect(ownerBalanceAfter).to.be.closeTo(ownerBalanceBefore + expectedReceived, ethers.parseEther("0.5"));
         });
     });
     

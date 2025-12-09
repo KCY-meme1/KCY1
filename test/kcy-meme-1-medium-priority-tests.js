@@ -57,8 +57,15 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 const balance0 = await token.balanceOf(addrs[0].address);
                 expect(balance0).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
                 
-                // For others just check > 0 (performance test)
-                for (let i = 1; i < 10; i++) {
+                // Check 2 more addresses to ensure consistency
+                const balance1 = await token.balanceOf(addrs[1].address);
+                expect(balance1).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
+                
+                const balance2 = await token.balanceOf(addrs[2].address);
+                expect(balance2).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
+                
+                // For remaining addresses just check > 0 (performance test)
+                for (let i = 3; i < 10; i++) {
                     const balance = await token.balanceOf(addrs[i].address);
                     expect(balance).to.be.gt(0);
                 }
@@ -288,7 +295,8 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 await tx2;
                 
                 const balance = await token.balanceOf(addr3.address);
-                expect(balance).to.be.gt(ethers.parseEther("900")); // ~1000 minus fees
+                // 2 transfers of 500: 2 * (500 - 500*0.0008) = 2 * 499.6 = 999.2
+                expect(balance).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("1"));
             });
         });
     });
