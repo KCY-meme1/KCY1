@@ -669,9 +669,9 @@ describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
             await token.connect(addr1).transfer(addr4.address, ethers.parseEther("2000"));
             await token.connect(addr1).transfer(addr5.address, ethers.parseEther("2000"));
             
-            // Both users should have ~1998 tokens each
-            expect(await token.balanceOf(addr4.address)).to.be.closeTo(ethers.parseEther("1998"), ethers.parseEther("5"));
-            expect(await token.balanceOf(addr5.address)).to.be.closeTo(ethers.parseEther("1998"), ethers.parseEther("5"));
+            // Both users should have ~1998.4 tokens each
+            expect(await token.balanceOf(addr4.address)).to.be.closeTo(ethers.parseEther("1998.4"), ethers.parseEther("1"));
+            expect(await token.balanceOf(addr5.address)).to.be.closeTo(ethers.parseEther("1998.4"), ethers.parseEther("1"));
         });
         
         it("13.2 Should apply 2h cooldown to Router → Same Normal user (but not different users)", async function() {
@@ -743,8 +743,8 @@ describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
             await token.connect(exemptAddr2).transfer(addr4.address, ethers.parseEther("2000"));
             
             // Normal users now have tokens:
-            // addr5: ~3996 tokens (2x 2000 after fees)
-            // addr4: ~1998 tokens (1x 2000 after fees)
+            // addr5: 3996.8 tokens (2x 2000 after fees: 2 * 1998.4)
+            // addr4: 1998.4 tokens (1x 2000 after fees)
             
             // Wait 2h cooldown for addr5 to be able to send (received from Router)
             await time.increase(COOLDOWN + 1);
@@ -755,32 +755,37 @@ describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
             // TRANSFER 1: Normal user 1 sends 2000 tokens to exempt slot
             await token.connect(addr5).transfer(addr1.address, ethers.parseEther("2000"));
             let balance1 = await token.balanceOf(addr1.address);
-            expect(balance1).to.be.closeTo(ethers.parseEther("1998"), ethers.parseEther("5"));
+            expect(balance1).to.be.closeTo(ethers.parseEther("1998.4"), ethers.parseEther("1"));
             
             // Wait 2h cooldown (only for same user)
             await time.increase(COOLDOWN + 1);
             
             // TRANSFER 2: Normal user 1 sends remaining tokens to exempt slot
-            // Need to account for fees (0.08%) so subtract a bit
+            // addr5 now has: 3996.8 - 2000 = 1996.8 tokens
+            // Sending: 1996.8 - 2 = 1994.8 tokens
+            // addr1 receives: 1994.8 * 0.9992 = ~1993.2
+            // Total in addr1: 1998.4 + 1993.2 = 3991.6
             const addr5Balance = await token.balanceOf(addr5.address);
             await token.connect(addr5).transfer(addr1.address, addr5Balance - ethers.parseEther("2"));
             balance1 = await token.balanceOf(addr1.address);
-            expect(balance1).to.be.closeTo(ethers.parseEther("3994"), ethers.parseEther("10"));
+            expect(balance1).to.be.closeTo(ethers.parseEther("3991.6"), ethers.parseEther("2"));
             
             // TRANSFER 3: Normal user 2 sends tokens to exempt slot
             // Need to wait 2h cooldown for addr4 (received from Router)
             await time.increase(COOLDOWN + 1);
             
-            // addr4 has ~1998 tokens, send all of them (accounting for fees)
+            // addr4 has ~1998.4 tokens, send all of them (accounting for fees)
+            // Sending: 1998.4 - 2 = 1996.4 tokens
+            // addr1 receives: 1996.4 * 0.9992 = ~1995.8
             const addr4Balance = await token.balanceOf(addr4.address);
             await token.connect(addr4).transfer(addr1.address, addr4Balance - ethers.parseEther("2"));
             
-            // VERIFY: Exempt slot has ~6000 tokens total
-            // (2000 + 2000 from user1) + (2000 from user2) ≈ 6000
+            // VERIFY: Exempt slot has ~5987.4 tokens total
+            // (1998.4 + 1993.2 from user1) + (1995.8 from user2) ≈ 5987.4
             // Each normal user has MAX 4k, but exempt slot can receive from MULTIPLE users
             balance1 = await token.balanceOf(addr1.address);
             expect(balance1).to.be.gt(ethers.parseEther("5000")); 
-            expect(balance1).to.be.closeTo(ethers.parseEther("5994"), ethers.parseEther("20"));
+            expect(balance1).to.be.closeTo(ethers.parseEther("5987.4"), ethers.parseEther("3"));
         });
     });
 });

@@ -142,9 +142,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
                                                ethers.ZeroAddress, ethers.ZeroAddress]);
                 
                 // Should succeed at exactly the limit
-                await expect(
-                    token.connect(addr1).transfer(addr2.address, maxAmount)
-                ).to.not.be.reverted;
+                await token.connect(addr1).transfer(addr2.address, maxAmount);
+                
+                const balance = await token.balanceOf(addr2.address);
+                // Expected: 2000 - (2000 * 0.0008) = 1998.4
+                expect(balance).to.be.closeTo(ethers.parseEther("1998.4"), ethers.parseEther("1"));
                 
                 // Should fail at limit + 1 wei
                 await time.increase(COOLDOWN + 1);
@@ -199,7 +201,9 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             await token.transfer(addr2.address, ethers.parseEther("100"));
             await token.transfer(addr2.address, ethers.parseEther("100"));
             
-            expect(await token.balanceOf(addr2.address)).to.be.gt(0);
+            const balance = await token.balanceOf(addr2.address);
+            // 3 transfers of 100 tokens each: 3 * 99.92 = 299.76
+            expect(balance).to.be.closeTo(ethers.parseEther("299.76"), ethers.parseEther("0.5"));
         });
         
         it("2.2 Should protect withdrawBNB from reentrancy", async function() {
@@ -432,9 +436,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             
             // After cooldown, succeeds
             await time.increase(COOLDOWN + 1);
-            await expect(
-                token.connect(addr1).transfer(addr3.address, ethers.parseEther("100"))
-            ).to.not.be.reverted;
+            await token.connect(addr1).transfer(addr3.address, ethers.parseEther("100"));
+            
+            const balance = await token.balanceOf(addr3.address);
+            // Expected: 100 - (100 * 0.0008) = 99.92
+            expect(balance).to.be.closeTo(ethers.parseEther("99.92"), ethers.parseEther("0.1"));
         });
         
         it("4.4 Invariant: Exempt users never have cooldown", async function() {

@@ -139,7 +139,10 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             await time.increase(COOLDOWN); // Exactly 2 hours
             
             await token.connect(addr1).transfer(addr3.address, ethers.parseEther("100"));
-            expect(Number(await token.balanceOf(addr3.address))).to.be.greaterThan(0);
+            
+            const balance = await token.balanceOf(addr3.address);
+            // Expected: 100 - (100 * 0.0008) = 99.92
+            expect(balance).to.be.closeTo(ethers.parseEther("99.92"), ethers.parseEther("0.1"));
         });
         
         it("3.2 Should fail 1 second before 2 hour cooldown", async function() {
@@ -180,7 +183,10 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             
             // Second exempt→normal transfer should succeed (exemptAddr1 → addr5 also completely fresh)
             await token.connect(exemptAddr1).transfer(addr5.address, ethers.parseEther("50"));
-            expect(Number(await token.balanceOf(addr5.address))).to.be.greaterThan(0);
+            
+            const balance = await token.balanceOf(addr5.address);
+            // Expected: 50 - (50 * 0.0008) = 49.96
+            expect(balance).to.be.closeTo(ethers.parseEther("49.96"), ethers.parseEther("0.1"));
         });
     });
     
@@ -292,7 +298,10 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
             
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
-            expect(Number(await token.balanceOf(addr2.address))).to.be.greaterThan(0);
+            
+            const balance = await token.balanceOf(addr2.address);
+            // Expected: 100 - (100 * 0.0008) = 99.92
+            expect(balance).to.be.closeTo(ethers.parseEther("99.92"), ethers.parseEther("0.1"));
         });
         
         it("6.3 Should unpause at exactly pausedUntil timestamp", async function() {

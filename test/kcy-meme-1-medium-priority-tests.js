@@ -50,7 +50,15 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 console.log(`      ⏱️  100 transfers completed in ${duration}ms`);
                 
                 // Verify balances
-                for (let i = 0; i < 10; i++) {
+                // Check at least one address has correct amount
+                // 10 transfers of 100 tokens each (owner is exempt, addrs are normal, so FEES apply!)
+                // Each transfer: 100 - (100 * 0.0008) = 99.92
+                // 10 transfers: 10 * 99.92 = 999.2
+                const balance0 = await token.balanceOf(addrs[0].address);
+                expect(balance0).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
+                
+                // For others just check > 0 (performance test)
+                for (let i = 1; i < 10; i++) {
                     const balance = await token.balanceOf(addrs[i].address);
                     expect(balance).to.be.gt(0);
                 }
@@ -360,7 +368,10 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 
                 // But can transfer within limits
                 await token.connect(addr1).transfer(addr3.address, ethers.parseEther("1000"));
-                expect(await token.balanceOf(addr3.address)).to.be.gt(0);
+                
+                const balance = await token.balanceOf(addr3.address);
+                // Expected: 1000 - (1000 * 0.0008) = 999.2
+                expect(balance).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
             });
             
             it("Should handle pause then unpause state", async function() {
