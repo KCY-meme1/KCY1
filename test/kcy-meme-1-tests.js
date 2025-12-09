@@ -417,7 +417,10 @@ describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
             
             await time.increase(COOLDOWN + 1);
             await token.connect(addr1).transfer(addr3.address, ethers.parseEther("500"));
-            expect(Number(await token.balanceOf(addr3.address))).to.be.greaterThan(0);
+            
+            const balance = await token.balanceOf(addr3.address);
+            // Expected: 500 - (500 * 0.0008) = 499.6
+            expect(balance).to.be.closeTo(ethers.parseEther("499.6"), ethers.parseEther("0.5"));
         });
     });
     
@@ -618,7 +621,10 @@ describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
             await time.increase(TRADING_LOCK + 1);
             
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
-            expect(Number(await token.balanceOf(addr2.address))).to.be.greaterThan(0);
+            
+            const balance = await token.balanceOf(addr2.address);
+            // Expected: 100 - (100 * 0.0008) = 99.92
+            expect(balance).to.be.closeTo(ethers.parseEther("99.92"), ethers.parseEther("0.1"));
         });
     });
     
