@@ -1,5 +1,6 @@
 /**
- * @version v37
+ * @version v38-FIXED
+ * FIXED: Test 8.2 now properly validates MAX_WALLET with actual received amounts
  */
 // KCY1 Token (KCY-meme-1) - Complete Test Suite (100M Supply)
 // MINIMAL CHANGES VERSION - Only updated limits (2000/4000)
@@ -10,7 +11,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
+describe("KCY1 Token v38-FIXED - Complete Test Suite (100M Supply)", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
@@ -388,16 +389,38 @@ describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
             ).to.be.revertedWith("Max 2000");
         });
         
-        it("8.2 Should enforce max wallet limit (4,000 tokens)", async function() {
+        it("8.2 Should enforce max wallet limit (4,000 tokens) - FIXED", async function() {
+            // FIXED: Now tests actual received amount vs MAX_WALLET
+            // With 0.08% fees, recipients receive 0.9992 of sent amount
+            
             const amountPerTransfer = ethers.parseEther("1000");
             
+            // Send 4x 1000 tokens, addr2 will receive ~3996.8 tokens after fees
             for (let i = 0; i < 4; i++) {
                 await token.connect(addr1).transfer(addr2.address, amountPerTransfer);
                 await time.increase(COOLDOWN + 1);
             }
             
+            const currentBalance = await token.balanceOf(addr2.address);
+            // Should be approximately 3996.8 tokens (4000 * 0.9992)
+            expect(currentBalance).to.be.closeTo(ethers.parseEther("3996.8"), ethers.parseEther("1"));
+            
+            // Calculate how much we can send to reach exactly 4000 tokens
+            const remaining = MAX_WALLET - currentBalance;
+            // With corrected logic, we can send amount such that: currentBalance + (amount * 0.9992) = 4000
+            // So: amount = remaining / 0.9992
+            const maxSendable = (remaining * 100000n) / 99920n;
+            
+            // Sending maxSendable should succeed (will reach ~4000)
+            await token.connect(addr1).transfer(addr2.address, maxSendable);
+            
+            const balanceAfterMax = await token.balanceOf(addr2.address);
+            expect(balanceAfterMax).to.be.closeTo(MAX_WALLET, ethers.parseEther("0.1"));
+            
+            // Now wallet is at limit, any additional transfer should fail
+            await time.increase(COOLDOWN + 1);
             await expect(
-                token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("1"))
             ).to.be.revertedWith("Max wallet 4k");
         });
         

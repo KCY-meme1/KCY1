@@ -4,11 +4,14 @@ pragma solidity ^0.8.20;
 import "./Addresses.sol";
 
 /**
- * @version v37
+ * @version v38-FIXED
  */
 // KCY1 Token (KCY-meme-1)
 /**
  * @dev Адресите се взимат от Addresses.sol - ЕДИН ФАЙЛ ЗА ВСИЧКО!
+ * 
+ *      FIXED IN v38: MAX_WALLET checks now use actualTransferAmount (after fees)
+ *                    instead of amount (before fees) for accurate limits.
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
  *      - Applied when at least one party is normal user
@@ -430,6 +433,15 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             require(block.timestamp >= tradingEnabledTime, "Locked 48h");
         }
         
+        // CORRECTED: Calculate transferAmount early for accurate MAX_WALLET checks
+        // When there are fees (normal transactions), recipient gets less than 'amount'
+        uint256 actualTransferAmount = amount;
+        if (!(fromExempt && toExempt)) {
+            uint256 burnAmount = (amount * BURN_FEE) / FEE_DENOMINATOR;
+            uint256 ownerAmount = (amount * OWNER_FEE) / FEE_DENOMINATOR;
+            actualTransferAmount = amount - burnAmount - ownerAmount;
+        }
+        
         if (isExemptSlotToNormal) {
             require(amount <= MAX_EXEMPT_TO_NORMAL, "Max 100");
             
@@ -441,9 +453,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                 );
             }
             
+            // CORRECTED: Check actual received amount after fees, not sent amount
             uint256 recipientBalance = balanceOf[to];
             require(
-                recipientBalance + amount <= MAX_WALLET,
+                recipientBalance + actualTransferAmount <= MAX_WALLET,
                 "Max wallet 4k"
             );
         }
@@ -451,9 +464,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             require(amount <= MAX_TRANSACTION, "Max 2000");
             
             if (!toExempt) {
+                // CORRECTED: Check actual received amount after fees, not sent amount
                 uint256 recipientBalance = balanceOf[to];
                 require(
-                    recipientBalance + amount <= MAX_WALLET,
+                    recipientBalance + actualTransferAmount <= MAX_WALLET,
                     "Max wallet 4k"
                 );
                 
