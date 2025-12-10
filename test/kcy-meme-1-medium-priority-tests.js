@@ -38,7 +38,34 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
     describe("1. STRESS TESTING", function() {
         describe("1.1 Sequential Transfers", function() {
             it("Should handle 100 sequential transfers from exempt address", async function() {
+                // Make all 10 test addresses exempt slots in batches of 4
+                // Batch 1: addrs[0-3]
+                await token.updateExemptSlots([addrs[0].address, addrs[1].address, 
+                                               addrs[2].address, addrs[3].address]);
+                for (let i = 0; i < 4; i++) {
+                    await token.transfer(addrs[i].address, ethers.parseEther("1000"));
+                }
+                
+                // Batch 2: addrs[4-7] (keep first 4 in memory, add next 4)
+                await token.updateExemptSlots([addrs[4].address, addrs[5].address, 
+                                               addrs[6].address, addrs[7].address]);
+                for (let i = 4; i < 8; i++) {
+                    await token.transfer(addrs[i].address, ethers.parseEther("1000"));
+                }
+                
+                // Batch 3: addrs[8-9]
+                await token.updateExemptSlots([addrs[8].address, addrs[9].address, 
+                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                for (let i = 8; i < 10; i++) {
+                    await token.transfer(addrs[i].address, ethers.parseEther("1000"));
+                }
+                
                 const startTime = Date.now();
+                
+                // Now do 100 transfers - owner will send to addresses that are NOT in exempt slots
+                // This means fees will apply!
+                // Owner (exempt slot) → addrs[0-7] (NOT exempt slots) = FEES
+                // Owner (exempt slot) → addrs[8-9] (exempt slots) = NO FEES
                 
                 for (let i = 0; i < 100; i++) {
                     await token.transfer(addrs[i % 10].address, ethers.parseEther("100"));
@@ -50,24 +77,16 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 console.log(`      ⏱️  100 transfers completed in ${duration}ms`);
                 
                 // Verify balances
-                // Check at least one address has correct amount
-                // 10 transfers of 100 tokens each (owner is exempt, addrs are normal, so FEES apply!)
-                // Each transfer: 100 - (100 * 0.0008) = 99.92
-                // 10 transfers: 10 * 99.92 = 999.2
-                const balance0 = await token.balanceOf(addrs[0].address);
-                expect(balance0).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
-                
-                // Check 2 more addresses to ensure consistency
-                const balance1 = await token.balanceOf(addrs[1].address);
-                expect(balance1).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
-                
-                const balance2 = await token.balanceOf(addrs[2].address);
-                expect(balance2).to.be.closeTo(ethers.parseEther("999.2"), ethers.parseEther("0.5"));
-                
-                // For remaining addresses just check > 0 (performance test)
-                for (let i = 3; i < 10; i++) {
+                // addrs[0-7] get 10 transfers each with fees: 1000 + 10*99.92 = 1999.2
+                for (let i = 0; i < 8; i++) {
                     const balance = await token.balanceOf(addrs[i].address);
-                    expect(balance).to.be.gt(0);
+                    expect(balance).to.be.closeTo(ethers.parseEther("1999.2"), ethers.parseEther("1"));
+                }
+                
+                // addrs[8-9] get 10 transfers each without fees: 1000 + 10*100 = 2000
+                for (let i = 8; i < 10; i++) {
+                    const balance = await token.balanceOf(addrs[i].address);
+                    expect(balance).to.equal(ethers.parseEther("2000"));
                 }
             });
             
@@ -150,20 +169,32 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 const startTime = Date.now();
                 const amount = ethers.parseEther("1000");
                 
-                // Hardhat provides limited signers, so use 10 instead of 50
-                for (let i = 0; i < 10; i++) {
+                // Make all 10 addresses exempt slots (in batches of 4)
+                await token.updateExemptSlots([addrs[0].address, addrs[1].address, 
+                                               addrs[2].address, addrs[3].address]);
+                for (let i = 0; i < 4; i++) {
+                    await token.transfer(addrs[i].address, amount);
+                }
+                
+                await token.updateExemptSlots([addrs[4].address, addrs[5].address, 
+                                               addrs[6].address, addrs[7].address]);
+                for (let i = 4; i < 8; i++) {
+                    await token.transfer(addrs[i].address, amount);
+                }
+                
+                await token.updateExemptSlots([addrs[8].address, addrs[9].address, 
+                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                for (let i = 8; i < 10; i++) {
                     await token.transfer(addrs[i].address, amount);
                 }
                 
                 const endTime = Date.now();
                 console.log(`      ⏱️  Distribution to 10 addresses: ${endTime - startTime}ms`);
                 
-                // Verify all received tokens (accounting for 0.08% fees on owner→normal)
+                // Verify all received tokens (exempt→exempt, no fees)
                 for (let i = 0; i < 10; i++) {
                     const balance = await token.balanceOf(addrs[i].address);
-                    // Should be close to 1000 but slightly less due to fees
-                    expect(balance).to.be.gt(ethers.parseEther("990"));
-                    expect(balance).to.be.lt(amount);
+                    expect(balance).to.equal(amount);
                 }
             });
             

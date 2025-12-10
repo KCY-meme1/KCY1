@@ -341,7 +341,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             const pairAddr = addr3.address;
             await token.setLiquidityPair(pairAddr, true);
             
-            // Setup: owner sends to pair
+            // Make pair exempt slot so owner can send tokens to it
+            await token.updateExemptSlots([pairAddr, ethers.ZeroAddress, 
+                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            // Setup: owner sends to pair (exempt → exempt)
             await token.transfer(pairAddr, ethers.parseEther("1000"));
             
             // Get router address
@@ -357,13 +361,19 @@ describe("KCY1 Token v33 - Edge Cases", function() {
 			const pairAddr = addr3.address;
 			await token.setLiquidityPair(pairAddr, true);
 			
-			// Owner sends tokens to pair (exempt to pair = allowed)
+			// Make pair exempt slot so owner can send tokens to it
+			await token.updateExemptSlots([pairAddr, ethers.ZeroAddress, 
+			                               ethers.ZeroAddress, ethers.ZeroAddress]);
+			
+			// Owner sends tokens to pair (exempt → exempt)
 			await token.transfer(pairAddr, ethers.parseEther("1000"));
 			
-			// Give addr1 some tokens to work with
-			await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			// Make addr1 exempt slot to give it tokens
+			await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
+			                               ethers.ZeroAddress, ethers.ZeroAddress]);
 			await token.transfer(addr1.address, ethers.parseEther("500"));
-			await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+			await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
+			                               ethers.ZeroAddress, ethers.ZeroAddress]);
 			
 			// Create approval from pair to addr1 using impersonation
 			await ethers.provider.send("hardhat_impersonateAccount", [pairAddr]);
@@ -468,15 +478,191 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         });
         
         it("10.3 Should correctly identify exempt slots vs other exempt addresses", async function() {
-            await token.updateExemptSlots([exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            // DON'T change exempt slots - owner is already eAddr1-4 from constructor
             
-            // exemptAddr1 is both exempt address AND exempt slot
-            expect(await token.isExemptAddress(exemptAddr1.address)).to.equal(true);
-            expect(await token.isExemptSlot(exemptAddr1.address)).to.equal(true);
-            
-            // owner is exempt address but NOT exempt slot
+            // owner is exempt address AND exempt slot
             expect(await token.isExemptAddress(owner.address)).to.equal(true);
-            expect(await token.isExemptSlot(owner.address)).to.equal(false);
+            expect(await token.isExemptSlot(owner.address)).to.equal(true);  // owner == eAddr1 == eAddr2 == eAddr3 == eAddr4
+            
+            // Router is exempt address but NOT exempt slot
+            const exempts = await token.getExemptAddresses();
+            expect(await token.isExemptAddress(exempts.router)).to.equal(true);
+            expect(await token.isExemptSlot(exempts.router)).to.equal(false);
+            
+            // Contract is exempt address but NOT exempt slot
+            expect(await token.isExemptAddress(await token.getAddress())).to.equal(true);
+            expect(await token.isExemptSlot(await token.getAddress())).to.equal(false);
+        });
+    });
+    
+    // ═══════════════════════════════════════════════════════════════════════════
+    // 8. MAX WALLET EDGE CASES
+    // ═══════════════════════════════════════════════════════════════════════════
+    
+    describe("8. Max Wallet Edge Cases", function() {
+        const MAX_WALLET = ethers.parseEther("4000");
+        const BURN_FEE = 30n;
+        const OWNER_FEE = 50n;
+        const FEE_DENOMINATOR = 100000n;
+        
+        beforeEach(async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Setup: Give addr1 tokens as exempt
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
+                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.transfer(addr1.address, ethers.parseEther("20000"));
+            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
+                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+        });
+        
+        it("8.1 User с 3999.5 токена получава 1 токен - трябва да FAIL", async function() {
+            // Fill addr2 wallet to 3999.5 tokens
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            
+            let balance = await token.balanceOf(addr2.address);
+            
+            // Send small amount to reach exactly 3999.5
+            await time.increase(COOLDOWN + 1);
+            const needed = ethers.parseEther("3999.5") - balance;
+            const amountToSend = (needed * FEE_DENOMINATOR) / (FEE_DENOMINATOR - BURN_FEE - OWNER_FEE);
+            
+            await token.connect(addr1).transfer(addr2.address, amountToSend);
+            
+            balance = await token.balanceOf(addr2.address);
+            expect(balance).to.be.closeTo(ethers.parseEther("3999.5"), ethers.parseEther("0.1"));
+            
+            // Try to send 1 token - should FAIL
+            // 1 token after fees = 0.9992
+            // 3999.5 + 0.9992 = 4000.4992 > 4000
+            await time.increase(COOLDOWN + 1);
+            
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("1"))
+            ).to.be.revertedWith("Max wallet 4k");
+        });
+        
+        it("8.2 User с 3999 токена получава 1 токен - трябва да SUCCESS", async function() {
+            // Fill addr2 wallet to exactly 3999 tokens
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            
+            let balance = await token.balanceOf(addr2.address);
+            
+            const needed = ethers.parseEther("3999") - balance;
+            const amountToSend = (needed * FEE_DENOMINATOR) / (FEE_DENOMINATOR - BURN_FEE - OWNER_FEE);
+            
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr2.address, amountToSend);
+            
+            balance = await token.balanceOf(addr2.address);
+            expect(balance).to.be.closeTo(ethers.parseEther("3999"), ethers.parseEther("0.1"));
+            
+            // Send 1 token - should SUCCESS
+            // 1 * 0.9992 = 0.9992
+            // 3999 + 0.9992 = 3999.9992 < 4000
+            await time.increase(COOLDOWN + 1);
+            
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("1"));
+            
+            balance = await token.balanceOf(addr2.address);
+            expect(balance).to.be.lt(MAX_WALLET);
+            expect(balance).to.be.closeTo(ethers.parseEther("3999.9992"), ethers.parseEther("0.01"));
+        });
+        
+        it("8.3 User с 3999.9 токена получава 0.1 токен - edge case", async function() {
+            // Fill to 3999.9
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            
+            let balance = await token.balanceOf(addr2.address);
+            const needed = ethers.parseEther("3999.9") - balance;
+            const amountToSend = (needed * FEE_DENOMINATOR) / (FEE_DENOMINATOR - BURN_FEE - OWNER_FEE);
+            
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr2.address, amountToSend);
+            
+            balance = await token.balanceOf(addr2.address);
+            
+            // Send 0.1 token
+            // 0.1 * 0.9992 = 0.09992
+            // 3999.9 + 0.09992 = 3999.99992 < 4000
+            await time.increase(COOLDOWN + 1);
+            
+            const smallAmount = ethers.parseEther("0.1");
+            await token.connect(addr1).transfer(addr2.address, smallAmount);
+            
+            balance = await token.balanceOf(addr2.address);
+            expect(balance).to.be.lt(MAX_WALLET);
+            expect(balance).to.be.closeTo(ethers.parseEther("3999.99992"), ethers.parseEther("0.001"));
+        });
+        
+        it("8.4 Не може 3x 2000 токена (overflow protection)", async function() {
+            // First 2000
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            await time.increase(COOLDOWN + 1);
+            
+            // Second 2000
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            
+            let balance = await token.balanceOf(addr2.address);
+            expect(balance).to.be.closeTo(ethers.parseEther("3996.8"), ethers.parseEther("1"));
+            
+            // Try third 2000 - should FAIL
+            // 3996.8 + 1998.4 = 5995.2 > 4000
+            await time.increase(COOLDOWN + 1);
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"))
+            ).to.be.revertedWith("Max wallet 4k");
+        });
+        
+        it("8.5 Fee calculation е прецизна", async function() {
+            const testAmount = ethers.parseEther("1000");
+            
+            // Calculate expected fees
+            const burnFee = (testAmount * BURN_FEE) / FEE_DENOMINATOR;
+            const ownerFee = (testAmount * OWNER_FEE) / FEE_DENOMINATOR;
+            const netAmount = testAmount - burnFee - ownerFee;
+            
+            // Send tokens
+            await token.connect(addr1).transfer(addr2.address, testAmount);
+            
+            const balance = await token.balanceOf(addr2.address);
+            
+            // Verify exact match
+            expect(balance).to.equal(netAmount);
+        });
+        
+        it("8.6 Exempt slot спазва max wallet към пълен user", async function() {
+            // Setup exempt slot
+            await token.updateExemptSlots([addr3.address, ethers.ZeroAddress, 
+                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.transfer(addr3.address, ethers.parseEther("1000"));
+            
+            // Fill addr2 to 3999 tokens
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
+            
+            let balance = await token.balanceOf(addr2.address);
+            const needed = ethers.parseEther("3999") - balance;
+            const amountToSend = (needed * FEE_DENOMINATOR) / (FEE_DENOMINATOR - BURN_FEE - OWNER_FEE);
+            
+            await time.increase(COOLDOWN + 1);
+            await token.connect(addr1).transfer(addr2.address, amountToSend);
+            
+            balance = await token.balanceOf(addr2.address);
+            
+            // Exempt slot tries to send 100 tokens (max allowed)
+            // 100 * 0.9992 = 99.92
+            // 3999 + 99.92 = 4098.92 > 4000
+            await expect(
+                token.connect(addr3).transfer(addr2.address, ethers.parseEther("100"))
+            ).to.be.revertedWith("Max wallet 4k");
         });
     });
 });

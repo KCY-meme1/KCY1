@@ -192,18 +192,19 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             // and that all vulnerable functions use the modifier
             
             // Basic test: Multiple transfers in quick succession should work
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
+            await token.updateExemptSlots([addr1.address, addr2.address, 
                                            ethers.ZeroAddress, ethers.ZeroAddress]);
             await token.transfer(addr1.address, ethers.parseEther("5000"));
             
             // These should all succeed (no reentrancy)
+            // Owner → addr2 (exempt slot), no limits
             await token.transfer(addr2.address, ethers.parseEther("100"));
             await token.transfer(addr2.address, ethers.parseEther("100"));
             await token.transfer(addr2.address, ethers.parseEther("100"));
             
             const balance = await token.balanceOf(addr2.address);
-            // 3 transfers of 100 tokens each: 3 * 99.92 = 299.76
-            expect(balance).to.be.closeTo(ethers.parseEther("299.76"), ethers.parseEther("0.5"));
+            // 3 transfers of 100 tokens each, exempt→exempt = no fees: 300
+            expect(balance).to.equal(ethers.parseEther("300"));
         });
         
         it("2.2 Should protect withdrawBNB from reentrancy", async function() {
@@ -232,13 +233,16 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             // MockToken also has 48h trading lock, so advance time
             await time.increase(48 * 60 * 60 + 1);
             
-            // Send some mock tokens to the main contract
-            // Note: transfer will have fees (0.08%), so contract gets slightly less
+            // Make token contract address exempt slot in mockToken so we can send > 100 tokens
+            await mockToken.updateExemptSlots([await token.getAddress(), ethers.ZeroAddress, 
+                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            // Send some mock tokens to the main contract (exempt → exempt = no fees)
             const sendAmount = ethers.parseEther("1000");
             await mockToken.transfer(await token.getAddress(), sendAmount);
             
             const contractBalance = await mockToken.balanceOf(await token.getAddress());
-            expect(contractBalance).to.be.gt(ethers.parseEther("990")); // Allow for fees
+            expect(contractBalance).to.equal(sendAmount); // No fees for exempt→exempt
             
             const ownerBalanceBefore = await mockToken.balanceOf(owner.address);
             
@@ -248,10 +252,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             expect(await mockToken.balanceOf(await token.getAddress())).to.equal(0);
             
             const ownerBalanceAfter = await mockToken.balanceOf(owner.address);
-            // Note: rescue also involves a transfer with fees (0.08%)
-            // So owner receives contractBalance - fees, not exactly contractBalance
-            const expectedReceived = (contractBalance * 99920n) / 100000n;
-            expect(ownerBalanceAfter).to.be.closeTo(ownerBalanceBefore + expectedReceived, ethers.parseEther("0.5"));
+            // Rescue transfer: contract (exempt) → owner (exempt) = NO fees
+            expect(ownerBalanceAfter).to.equal(ownerBalanceBefore + contractBalance);
         });
     });
     
@@ -280,6 +282,10 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         });
         
         it("3.2 Should measure gas for exempt transfer", async function() {
+            // Make addr1 exempt slot for exempt→exempt transfer
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
+                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            
             const tx = await token.transfer(addr1.address, ethers.parseEther("1000"));
             const receipt = await tx.wait();
             
@@ -343,18 +349,22 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         });
         
         it("3.6 Should compare gas: exempt vs normal transfer", async function() {
-            // Exempt transfer
+            // Make addr1 exempt slot for first transfer
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
+                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            
+            // Exempt transfer (owner → addr1, both exempt)
             const tx1 = await token.transfer(addr1.address, ethers.parseEther("1000"));
             const receipt1 = await tx1.wait();
             
-            // Setup normal user
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            // Give addr1 more tokens
             await token.transfer(addr1.address, ethers.parseEther("5000"));
+            
+            // Remove addr1 from exempt slots (now normal user)
             await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
                                            ethers.ZeroAddress, ethers.ZeroAddress]);
             
-            // Normal transfer
+            // Normal transfer (addr1 normal → addr2 normal)
             const tx2 = await token.connect(addr1).transfer(
                 addr2.address, 
                 ethers.parseEther("100")
@@ -451,16 +461,20 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         });
         
         it("4.4 Invariant: Exempt users never have cooldown", async function() {
+            // Make addr1 exempt slot
+            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
+                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            
             // Multiple exempt transfers in quick succession
+            // Owner (exempt slot) → addr1 (exempt slot): no fees, no cooldown
             await token.transfer(addr1.address, ethers.parseEther("100"));
             await token.transfer(addr1.address, ethers.parseEther("100"));
             await token.transfer(addr1.address, ethers.parseEther("100"));
             
             // All should succeed without any cooldown
-            // Note: owner→normal user has fees, so balance will be slightly less than 300
+            // Exempt→exempt has no fees, so balance is exactly 300
             const balance = await token.balanceOf(addr1.address);
-            expect(balance).to.be.gt(ethers.parseEther("295")); // Allow for fees (0.08% × 3)
-            expect(balance).to.be.lt(ethers.parseEther("300"));
+            expect(balance).to.equal(ethers.parseEther("300"));
         });
     });
 });
