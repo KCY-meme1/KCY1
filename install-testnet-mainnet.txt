@@ -1,0 +1,113 @@
+Ето пълната процедура за деплой на токен с Hardhat от testnet към mainnet:
+
+## 1. Настройка на проекта
+
+```bash
+npm install --save-dev hardhat @nomicfoundation/hardhat-toolbox
+npx hardhat init
+```
+
+## 2. Конфигурация на `hardhat.config.js`
+
+```javascript
+require("@nomicfoundation/hardhat-toolbox");
+require('dotenv').config();
+
+module.exports = {
+  solidity: "0.8.20",
+  networks: {
+    // Testnet (напр. Sepolia за Ethereum)
+    sepolia: {
+      url: process.env.SEPOLIA_RPC_URL, // от Alchemy/Infura
+      accounts: [process.env.PRIVATE_KEY],
+      chainId: 11155111
+    },
+    // Mainnet
+    mainnet: {
+      url: process.env.MAINNET_RPC_URL,
+      accounts: [process.env.PRIVATE_KEY],
+      chainId: 1
+    }
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY
+  }
+};
+```
+
+## 3. `.env` файл (не го качвай в Git!)
+
+```env
+PRIVATE_KEY=твоят_private_key
+SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/твоят_api_key
+MAINNET_RPC_URL=https://eth-mainnet.g.alchemy.com/v2/твоят_api_key
+ETHERSCAN_API_KEY=твоят_etherscan_key
+```
+
+## 4. Deploy скрипт `scripts/deploy.js`
+
+```javascript
+const hre = require("hardhat");
+
+async function main() {
+  const [deployer] = await hre.ethers.getSigners();
+  console.log("Deploying with account:", deployer.address);
+
+  const Token = await hre.ethers.getContractFactory("MyToken");
+  const token = await Token.deploy();
+  
+  await token.waitForDeployment();
+  const address = await token.getAddress();
+  
+  console.log("Token deployed to:", address);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+```
+
+## 5. Процедурата стъпка по стъпка
+
+### **На Testnet (напр. Sepolia):**
+
+```bash
+# Деплой
+npx hardhat run scripts/deploy.js --network sepolia
+
+# Верификация на Etherscan
+npx hardhat verify --network sepolia АДРЕС_НА_КОНТРАКТА
+```
+
+### **Тестване на testnet:**
+- Провери функциите на токена
+- Направи тестови трансакции
+- Провери в block explorer (Sepolia Etherscan)
+
+### **На Mainnet (след тестване!):**
+
+```bash
+# Деплой (ВНИМАНИЕ: реални пари!)
+npx hardhat run scripts/deploy.js --network mainnet
+
+# Верификация
+npx hardhat verify --network mainnet АДРЕС_НА_КОНТРАКТА
+```
+
+## 6. Важни препоръки
+
+⚠️ **Преди mainnet:**
+- Тествай всичко на testnet поне седмица
+- Направи security audit ако е сериозен проект
+- Провери за достатъчно ETH за gas fees
+- Backup на private key
+- Използвай multisig wallet за по-големи проекти
+
+💡 **Добри практики:**
+- Използвай `.gitignore` за `.env` файла
+- Тествай с малки суми първо
+- Запази адресите на deployment
+- Документирай всички стъпки
+
+Имаш ли конкретен токен, който искаш да деплойнеш, или трябва помощ с конкретна мрежа (BSC, Polygon и т.н.)?
