@@ -1,8 +1,8 @@
 /**
- * @version v37
+ * @version v38 - WITH MINT & SECURITY TESTS
  */
 // KCY1 Token (KCY-meme-1) - Complete Test Suite (100M Supply)
-// MINIMAL CHANGES VERSION - Only updated limits (2000/4000)
+// ADDED: Mint functionality, DEX lock, Security attack tests
 // Tests all critical fixes and functionality
 // Use with Hardhat: npx hardhat test
 
@@ -10,7 +10,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
-describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
+describe("KCY1 Token v38 - Complete Test Suite with Mint & Security", function() {
     let token;
     let owner;
     let addr1, addr2, addr3, addr4, addr5;
@@ -786,6 +786,518 @@ describe("KCY1 Token v37 - Complete Test Suite (100M Supply)", function() {
             balance1 = await token.balanceOf(addr1.address);
             expect(balance1).to.be.gt(ethers.parseEther("5000")); 
             expect(balance1).to.be.closeTo(ethers.parseEther("5987.4"), ethers.parseEther("3"));
+        });
+    });
+    
+    // =========================================================================
+    // MINT FUNCTIONALITY TESTS - v38
+    // =========================================================================
+    
+    describe("Mint Functionality", function() {
+        
+        it("Should propose mint correctly", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            const amount = ethers.parseEther("400000");  // 400K tokens (under 0.5% of 100M = 500K)
+            
+            await expect(token.proposeMint(amount))
+                .to.emit(token, "MintProposed");
+            
+            const proposal = await token.mintProposals(1);
+            expect(proposal.amount).to.equal(amount);
+            expect(proposal.executed).to.equal(false);
+        });
+        
+        it("Should execute mint after timelock", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            const amount = ethers.parseEther("400000");  // 400K tokens
+            await token.proposeMint(amount);
+            
+            // Try to execute immediately (should fail)
+            await expect(token.executeMint(1))
+                .to.be.revertedWith("Timelock not passed");
+            
+            // Wait for timelock (1 day)
+            await time.increase(24 * 60 * 60 + 1);
+            
+            // Execute should work now
+            const initialSupply = await token.totalSupply();
+            await expect(token.executeMint(1))
+                .to.emit(token, "MintExecuted");
+            
+            expect(await token.totalSupply()).to.equal(initialSupply + amount);
+        });
+        
+        it("Should respect 5M max limit", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            const tooMuch = ethers.parseEther("6000000");  // 6M > 5M limit
+            
+            await expect(token.proposeMint(tooMuch))
+                .to.be.revertedWith("Exceeds max mint");
+        });
+        
+        it("Should respect 0.5% limit", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Current supply is 100M, so 0.5% = 500K
+            const halfPercent = ethers.parseEther("500000");
+            const justOverLimit = halfPercent + ethers.parseEther("1");
+            
+            await expect(token.proposeMint(justOverLimit))
+                .to.be.revertedWith("Exceeds max mint");
+            
+            // At limit should work
+            await expect(token.proposeMint(halfPercent))
+                .to.not.be.reverted;
+        });
+        
+        it("Should enforce cooldown between mints", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // First mint
+            await token.proposeMint(ethers.parseEther("100000"));
+            await time.increase(24 * 60 * 60 + 1);
+            await token.executeMint(1);
+            
+            // Try to propose immediately (should fail)
+            await expect(token.proposeMint(ethers.parseEther("100000")))
+                .to.be.revertedWith("Cooldown not passed");
+            
+            // Wait for cooldown (1 week)
+            await time.increase(7 * 24 * 60 * 60 + 1);
+            
+            // Should work now
+            await expect(token.proposeMint(ethers.parseEther("100000")))
+                .to.not.be.reverted;
+        });
+        
+        it("Should not allow double execution", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            await token.proposeMint(ethers.parseEther("100000"));
+            await time.increase(24 * 60 * 60 + 1);
+            await token.executeMint(1);
+            
+            // Try to execute again
+            await expect(token.executeMint(1))
+                .to.be.revertedWith("Already executed");
+        });
+        
+        it("Should only allow owner to mint", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            await expect(
+                token.connect(addr1).proposeMint(ethers.parseEther("100000"))
+            ).to.be.revertedWith("Not owner");
+        });
+    });
+    
+    // =========================================================================
+    // DEX LOCK TESTS - v38
+    // =========================================================================
+    
+    describe("DEX Address Lock", function() {
+        
+        it("Should allow locking DEX addresses", async function() {
+            expect(await token.dexAddressesLocked()).to.equal(false);
+            
+            await expect(token.lockDEXAddresses())
+                .to.emit(token, "DEXAddressesLocked");
+            
+            expect(await token.dexAddressesLocked()).to.equal(true);
+        });
+        
+        it("Should prevent updating DEX after lock", async function() {
+            await token.lockDEXAddresses();
+            
+            await expect(
+                token.updateDEXAddresses(addr1.address, addr2.address)
+            ).to.be.revertedWith("DEX locked");
+        });
+        
+        it("Should allow updating DEX before lock", async function() {
+            const newRouter = addr1.address;
+            const newFactory = addr2.address;
+            
+            await expect(token.updateDEXAddresses(newRouter, newFactory))
+                .to.emit(token, "DEXAddressesUpdated");
+            
+            expect(await token.pncswpRouter()).to.equal(newRouter);
+            expect(await token.pncswpFactory()).to.equal(newFactory);
+        });
+    });
+    
+    // =========================================================================
+    // LIQUIDITY DRAIN ATTACK TEST - ПОКАЗВА ЧЕ Е ВЪЗМОЖНА
+    // =========================================================================
+    
+    describe("Security: Liquidity Drain Attack (TEST PASSES = ATTACK POSSIBLE)", function() {
+        
+        it("VULNERABILITY: Owner can drain liquidity via exempt slots", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // SETUP: Owner makes himself exempt
+            await token.updateExemptSlots([
+                owner.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // SETUP: Make addr2 also exempt (to bypass exempt-to-normal limit)
+            await token.updateExemptSlots([
+                owner.address,
+                addr2.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // ATTACK: Owner transfers large amount without fees (exempt-to-exempt)
+            const largeAmount = ethers.parseEther("5000000");
+            await token.transfer(addr2.address, largeAmount);
+            
+            // VERIFY ATTACK SUCCESS:
+            const addr2Balance = await token.balanceOf(addr2.address);
+            expect(addr2Balance).to.equal(largeAmount);  // Full amount, no fees!
+            
+            // This test PASSES = Attack is POSSIBLE!
+            // Owner bypassed all limits and fees by making himself exempt
+        });
+        
+        it("VULNERABILITY: Owner can manipulate liquidity pairs", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // ATTACK: Add fake "liquidity pair"
+            const fakePair = addr3.address;
+            await token.setLiquidityPair(fakePair, true);
+            
+            // VERIFY: Fake pair is now a liquidity pair
+            expect(await token.isLiquidityPair(fakePair)).to.equal(true);
+            
+            // ATTACK: Make owner, fakePair, and addr4 ALL exempt slots
+            // This bypasses ALL limits
+            await token.updateExemptSlots([
+                owner.address,
+                fakePair,  // addr3 - fake pair is exempt slot
+                addr4.address,  // addr4 - final destination is exempt slot
+                ethers.ZeroAddress
+            ]);
+            
+            // Owner to fake pair (exempt-to-exempt = no limits)
+            await token.transfer(fakePair, ethers.parseEther("1000000"));
+            
+            // Fake pair to final destination (exempt-to-exempt = no limits)
+            await token.connect(addr3).transfer(
+                addr4.address,
+                ethers.parseEther("1000000")
+            );
+            
+            // VERIFY ATTACK SUCCESS
+            expect(await token.balanceOf(addr4.address)).to.equal(
+                ethers.parseEther("1000000")
+            );
+            
+            // Test PASSES = Attack is POSSIBLE!
+            // Owner can manipulate BOTH liquidity pairs AND exempt slots
+            // to move unlimited amounts with zero fees
+        });
+    });
+    
+    // =========================================================================
+    // MALICIOUS ROUTER REPLACEMENT TEST
+    // =========================================================================
+    
+    describe("Security: Malicious Router Replacement", function() {
+        
+        it("VULNERABILITY: Owner can replace router with malicious contract", async function() {
+            const originalRouter = await token.pncswpRouter();
+            const maliciousRouter = addr5.address;  // Simulating malicious contract
+            
+            // ATTACK: Owner replaces router
+            await token.updateDEXAddresses(
+                maliciousRouter,
+                await token.pncswpFactory()
+            );
+            
+            // VERIFY: Router was changed
+            expect(await token.pncswpRouter()).to.equal(maliciousRouter);
+            
+            // VERIFY: Malicious router is exempt!
+            expect(await token.isExemptAddress(maliciousRouter)).to.equal(true);
+            
+            // ATTACK: Use malicious router to drain
+            await time.increase(TRADING_LOCK + 1);
+            await token.updateExemptSlots([
+                owner.address,
+                addr1.address,  // Make addr1 also exempt
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // Owner to malicious router (both exempt)
+            await token.transfer(maliciousRouter, ethers.parseEther("1000000"));
+            
+            // Malicious router to exempt address (no limits)
+            await token.connect(addr5).transfer(
+                addr1.address,
+                ethers.parseEther("1000000")
+            );
+            
+            // VERIFY ATTACK SUCCESS
+            expect(await token.balanceOf(addr1.address)).to.equal(
+                ethers.parseEther("1000000")
+            );
+            
+            // Test PASSES = Attack is POSSIBLE before lock!
+        });
+        
+        it("PROTECTION: Cannot replace router after lock", async function() {
+            // Lock DEX addresses
+            await token.lockDEXAddresses();
+            
+            // Try to replace
+            await expect(
+                token.updateDEXAddresses(addr1.address, addr2.address)
+            ).to.be.revertedWith("DEX locked");
+            
+            // Test PASSES = Protection WORKS after lock!
+        });
+    });
+    
+    // =========================================================================
+    // COOLDOWN RULES - CORRECTED TESTS (БЕЗ ПРОМЯНА НА КОДА)
+    // =========================================================================
+    
+    describe("Cooldown Rules - Comprehensive Tests", function() {
+        
+        it("RULE 1: Exempt ↔ Exempt = NO cooldown", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Set two exempt slots
+            await token.updateExemptSlots([
+                addr1.address,
+                addr2.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            await token.transfer(addr1.address, ethers.parseEther("5000"));
+            
+            // Exempt can send multiple times WITHOUT cooldown
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
+            
+            // All succeed - NO cooldown!
+            expect(await token.balanceOf(addr2.address)).to.equal(
+                ethers.parseEther("300")
+            );
+        });
+        
+        it("RULE 2: Exempt Slot → Normal = 24h cooldown", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Set exempt slot
+            await token.updateExemptSlots([
+                addr1.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            await token.transfer(addr1.address, ethers.parseEther("500"));
+            
+            // First transfer to normal user
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"));
+            
+            // Second transfer should fail (24h cooldown)
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Wait 24h");
+            
+            // After 24h, should work
+            await time.increase(24 * 60 * 60 + 1);
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.not.be.reverted;
+        });
+        
+        it("RULE 3: Normal → Exempt = 2h cooldown (sender)", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Setup: Give tokens to normal user
+            await token.updateExemptSlots([
+                owner.address,
+                addr1.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // Owner gives tokens to addr2 (owner is exempt, addr2 will be normal)
+            // But this is exempt-to-normal, so max 100 tokens!
+            await token.transfer(addr2.address, ethers.parseEther("100"));
+            
+            // Wait for cooldown
+            await time.increase(24 * 60 * 60 + 1);
+            
+            // Give more tokens
+            await token.transfer(addr2.address, ethers.parseEther("100"));
+            
+            // Remove owner from exempt for this test
+            await token.updateExemptSlots([
+                addr1.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // First transfer (normal to exempt)
+            await token.connect(addr2).transfer(addr1.address, ethers.parseEther("50"));
+            
+            // Second transfer should fail (2h cooldown)
+            await expect(
+                token.connect(addr2).transfer(addr1.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Wait 2h");
+            
+            // After 2h, should work
+            await time.increase(2 * 60 * 60 + 1);
+            await expect(
+                token.connect(addr2).transfer(addr1.address, ethers.parseEther("50"))
+            ).to.not.be.reverted;
+        });
+        
+        it("RULE 4: Normal ↔ Normal = 2h cooldown (sender)", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Setup: Give tokens to normal users
+            await token.updateExemptSlots([
+                owner.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // Owner gives to addr1 (exempt-to-normal, max 100)
+            await token.transfer(addr1.address, ethers.parseEther("100"));
+            
+            // Wait and give more
+            await time.increase(24 * 60 * 60 + 1);
+            await token.transfer(addr1.address, ethers.parseEther("100"));
+            
+            await token.updateExemptSlots([
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // First transfer (normal to normal)
+            await token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"));
+            
+            // Second transfer should fail (2h cooldown)
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Wait 2h");
+            
+            // After 2h, should work
+            await time.increase(2 * 60 * 60 + 1);
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.not.be.reverted;
+        });
+        
+        it("CORRECTED: Owner can bypass cooldown if exempt", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Make owner and addr1 exempt
+            await token.updateExemptSlots([
+                owner.address,
+                addr1.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // Owner can send multiple times to exempt address (no cooldown)
+            await token.transfer(addr1.address, ethers.parseEther("100"));
+            await token.transfer(addr1.address, ethers.parseEther("100"));
+            await token.transfer(addr1.address, ethers.parseEther("100"));
+            
+            // All succeed - no cooldown for exempt-to-exempt!
+            expect(await token.balanceOf(addr1.address)).to.equal(
+                ethers.parseEther("300")
+            );
+        });
+    });
+    
+    // =========================================================================
+    // EMERGENCY PAUSE - БЕЗ ПРОМЕНИ, САМО ДОКУМЕНТАЦИЯ
+    // =========================================================================
+    
+    describe("Emergency Pause - Legitimate Function", function() {
+        
+        it("Should allow owner to pause trading", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Pause for 24 hours
+            await expect(token.pause())
+                .to.emit(token, "Paused");
+            
+            expect(await token.isPaused()).to.equal(true);
+        });
+        
+        it("Should block normal users during pause", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Setup: Give tokens to user
+            await token.updateExemptSlots([
+                owner.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // Owner gives 100 tokens (exempt-to-normal max)
+            await token.transfer(addr1.address, ethers.parseEther("100"));
+            
+            await token.updateExemptSlots([
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // Pause trading
+            await token.pause();
+            
+            // User CANNOT trade
+            await expect(
+                token.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
+            ).to.be.revertedWith("Paused");
+        });
+        
+        it("NOTE: Owner can still trade if exempt during pause", async function() {
+            await time.increase(TRADING_LOCK + 1);
+            
+            // Pause
+            await token.pause();
+            
+            // Make owner and addr1 exempt
+            await token.updateExemptSlots([
+                owner.address,
+                addr1.address,
+                ethers.ZeroAddress,
+                ethers.ZeroAddress
+            ]);
+            
+            // Owner CAN trade (exempt-to-exempt bypasses pause check)
+            await expect(
+                token.transfer(addr1.address, ethers.parseEther("1000"))
+            ).to.not.be.reverted;
+            
+            // This is by design - exempt addresses can trade during pause
+            // Useful for emergency liquidity operations
         });
     });
 });

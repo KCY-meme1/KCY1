@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "./Addresses.sol";
 
 /**
- * @version v37
+ * @version v38 - WITH MINT & DEX LOCK
  */
 // KCY1 Token (KCY-meme-1)
 /**
@@ -152,18 +152,52 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     mapping(address => uint256) public lastExemptToNormalTime;
     mapping(address => bool) public isBlacklisted;
     
+    // ============================================================================
+    // MINT FUNCTIONALITY - v38
+    // ============================================================================
+    
+    uint256 public constant MAX_MINT_AMOUNT = 5_000_000 * 10**18;  // 5M tokens
+    uint256 public constant MINT_TIMELOCK = 1 days;
+    uint256 public constant MINT_COOLDOWN = 1 weeks;
+    uint256 public lastMintTime;
+    
+    struct MintProposal {
+        uint256 amount;
+        uint256 proposedAt;
+        uint256 executeAfter;
+        bool executed;
+    }
+    
+    mapping(uint256 => MintProposal) public mintProposals;
+    uint256 public proposalCount;
+    
+    // ============================================================================
+    // DEX LOCK - v38
+    // ============================================================================
+    
+    bool public dexAddressesLocked;
+    
+    // ============================================================================
+    // EVENTS
+    // ============================================================================
+    
     event TokensBurned(uint256 amount);
     event Paused(uint256 until);
     event Blacklisted(address indexed account, bool status);
     event ExemptSlotsUpdated(address[4] slots);
     event ExemptSlotsLocked();
     event DEXAddressesUpdated(address indexed router, address indexed factory);
+    event DEXAddressesLocked();
     event EmergencyTokensRescued(address indexed token, uint256 amount);
     event BNBWithdrawn(uint256 amount);
     event InitialDistributionCompleted(uint256 totalDistributed);
     event DistributionSent(address indexed recipient, uint256 amount);
     event LiquidityPairUpdated(address indexed pair, bool status);
     event LiquidityPairsLocked();
+    
+    // Mint events
+    event MintProposed(uint256 indexed proposalId, uint256 amount, uint256 executeAfter);
+    event MintExecuted(uint256 indexed proposalId, uint256 amount);
     
     modifier onlyOwner() {
         require(msg.sender == owner, "Not owner");
@@ -182,6 +216,11 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     
     modifier whenPairsNotLocked() {
         require(!liquidityPairsLocked, "Pairs locked");
+        _;
+    }
+    
+    modifier whenDEXNotLocked() {
+        require(!dexAddressesLocked, "DEX locked");
         _;
     }
     
@@ -333,7 +372,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         emit ExemptSlotsLocked();
     }
     
-    function updateDEXAddresses(address router, address factory) external onlyOwner {
+    function updateDEXAddresses(address router, address factory) external onlyOwner whenDEXNotLocked {
         require(router != address(0), "Router zero");
         require(factory != address(0), "Factory zero");
         
@@ -625,5 +664,115 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         require(success, "BNB failed");
         
         emit BNBWithdrawn(balance);
+    }
+    
+    // ============================================================================
+    // DEX LOCK - v38
+    // ============================================================================
+    
+    /**
+     * @notice Locks DEX addresses permanently (cannot be unlocked!)
+     * @dev Once called, router and factory can NEVER be changed
+     */
+    function lockDEXAddresses() external onlyOwner {
+        dexAddressesLocked = true;
+        emit DEXAddressesLocked();
+    }
+    
+    // ============================================================================
+    // MINT FUNCTIONALITY - v38
+    // ============================================================================
+    
+    /**
+     * @notice Proposes a new mint (Step 1 of 2)
+     * @param amount Amount of tokens to mint (must be ≤ 5M or 0.5% of supply)
+     */
+    function proposeMint(uint256 amount) external onlyOwner whenNotPaused {
+        require(amount > 0, "Amount must be > 0");
+        
+        // Check cooldown from last executed mint
+        require(
+            block.timestamp >= lastMintTime + MINT_COOLDOWN,
+            "Cooldown not passed"
+        );
+        
+        // Check max limit: lesser of 5M or 0.5% of current supply
+        uint256 maxAllowed = MAX_MINT_AMOUNT;
+        uint256 halfPercent = (totalSupply * 50) / 10000;  // 0.5%
+        if (halfPercent < maxAllowed) {
+            maxAllowed = halfPercent;
+        }
+        
+        require(amount <= maxAllowed, "Exceeds max mint");
+        
+        proposalCount++;
+        mintProposals[proposalCount] = MintProposal({
+            amount: amount,
+            proposedAt: block.timestamp,
+            executeAfter: block.timestamp + MINT_TIMELOCK,
+            executed: false
+        });
+        
+        emit MintProposed(proposalCount, amount, block.timestamp + MINT_TIMELOCK);
+    }
+    
+    /**
+     * @notice Executes a mint proposal (Step 2 of 2)
+     * @param proposalId ID of the proposal to execute
+     */
+    function executeMint(uint256 proposalId) external onlyOwner whenNotPaused {
+        MintProposal storage proposal = mintProposals[proposalId];
+        
+        require(!proposal.executed, "Already executed");
+        require(proposal.amount > 0, "Invalid proposal");
+        require(
+            block.timestamp >= proposal.executeAfter,
+            "Timelock not passed"
+        );
+        
+        // Execute mint
+        proposal.executed = true;
+        lastMintTime = block.timestamp;
+        
+        unchecked {
+            totalSupply += proposal.amount;
+            balanceOf[owner] += proposal.amount;
+        }
+        
+        emit Transfer(address(0), owner, proposal.amount);
+        emit MintExecuted(proposalId, proposal.amount);
+    }
+    
+    /**
+     * @notice Gets the maximum mintable amount right now
+     * @return Maximum amount that can be minted
+     */
+    function getMaxMintableNow() external view returns (uint256) {
+        // Check cooldown
+        if (lastMintTime != 0 && block.timestamp < lastMintTime + MINT_COOLDOWN) {
+            return 0;
+        }
+        
+        // Return lesser of 5M or 0.5%
+        uint256 maxAllowed = MAX_MINT_AMOUNT;
+        uint256 halfPercent = (totalSupply * 50) / 10000;
+        return halfPercent < maxAllowed ? halfPercent : maxAllowed;
+    }
+    
+    /**
+     * @notice Gets time until next mint is possible
+     * @return Seconds until next mint (0 if can mint now)
+     */
+    function getTimeUntilNextMint() external view returns (uint256) {
+        if (lastMintTime == 0) {
+            return 0;
+        }
+        
+        uint256 nextMintTime = lastMintTime + MINT_COOLDOWN;
+        if (block.timestamp >= nextMintTime) {
+            return 0;
+        }
+        
+        return nextMintTime - block.timestamp;
     }
 }
