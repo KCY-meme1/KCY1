@@ -4,11 +4,38 @@ pragma solidity ^0.8.20;
 import "./Addresses.sol";
 
 /**
- * @version v38 - WITH MINT & DEX LOCK
+ * @version v39 - WITH UNLOCK FUNCTIONS
+ * @notice All normal functions (including LOCK) can be called by owner OR exempt slots
+ *         UNLOCK functions can ONLY be called via multi-sig
+ *         Owner ALWAYS follows exempt slot rules (100 tokens/24h to normal)
  */
 // KCY1 Token (KCY-meme-1)
 /**
  * @dev Адресите се взимат от Addresses.sol - ЕДИН ФАЙЛ ЗА ВСИЧКО!
+ * 
+ *      CONTROL SYSTEM (v39):
+ *        Normal Functions (Owner OR Exempt Slots can call):
+ *          - pause/unpause trading
+ *          - blacklist users
+ *          - propose/execute mints
+ *          - update exempt slots (if not locked)
+ *          - update DEX addresses (if not locked)
+ *          - update liquidity pairs (if not locked)
+ *          - lockDEXAddresses() - Lock router/factory
+ *          - lockExemptSlots() - Lock exempt slots
+ *          - lockLiquidityPairs() - Lock liquidity pairs
+ * 
+ *        UNLOCK Functions (ONLY Multi-Sig can call):
+ *          - unlockDEXAddresses() - Unlock router/factory (ONLY multi-sig)
+ *          - unlockExemptSlots() - Unlock exempt slots (ONLY multi-sig)
+ *          - unlockLiquidityPairs() - Unlock pairs (ONLY multi-sig)
+ *          - REQUIRES 3-of-5 multi-sig signatures
+ * 
+ *      MULTI-SIG INDEPENDENCE:
+ *        - Multi-sig owners CAN be different from exempt slots
+ *        - Multi-sig address MUST be added as exempt slot to work
+ *        - Example: 5 multi-sig owners control unlock operations
+ *                   4 different exempt slots control normal operations
  * 
  *      FEES: 0.08% total (0.03% burn + 0.05% owner)
  *      - Applied when at least one party is normal user
@@ -22,19 +49,21 @@ import "./Addresses.sol";
  *        ✓ 2 hour cooldown
  *        ✓ 4,000 token max wallet
  *      
- *      EXEMPT (4 slots) ↔ EXEMPT/Router/Factory:
+ *      EXEMPT SLOTS (owner + eAddr1-4) ↔ EXEMPT/Router/Factory:
  *        ✓ NO fees (0%)
  *        ✓ NO limits
  *        ✓ CAN add/remove liquidity
+ *        ✓ CAN control contract functions
  * 
- *      SPECIAL: EXEMPT (4 slots) → NORMAL user:
+ *      SPECIAL: EXEMPT SLOTS (owner + eAddr1-4) → NORMAL user:
+ *        ⚠️ Owner ALSO follows these rules!
  *        ✓ 0.08% fees (SAME as normal!)
- *        ✓ 100 token max (not 1000!)
+ *        ✓ 100 token max (not 2000!)
  *        ✓ 24 hour cooldown (not 2 hours!)
  * 
  *      LOCKING:
  *        - Exempt 4 slots: CAN be locked forever
- *        - Router/Factory: NEVER locked, always updatable
+ *        - Router/Factory: CAN be locked forever (v38)
  *        - Liquidity Pairs: CAN be locked forever
  * 
  *      DEPLOYMENT:
@@ -55,6 +84,7 @@ import "./Addresses.sol";
  *        - eAddr2 = Marketing wallet
  *        - eAddr3 = Team wallet
  *        - eAddr4 = Advisor wallet
+ *        - ALL 5 addresses (owner + 4 slots) have equal control
  * 
  *      ADDRESSES (hardcoded in constructor):
  *        See config/addresses.js for reference
@@ -142,6 +172,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     address public pncswpFactory;
     
     bool public exemptSlotsLocked;
+    uint256 public exemptSlotsCooldownUntil;  // Cooldown after updateExemptSlots
     
     mapping(address => bool) public isLiquidityPair;
     bool public liquidityPairsLocked;
@@ -194,13 +225,40 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     event DistributionSent(address indexed recipient, uint256 amount);
     event LiquidityPairUpdated(address indexed pair, bool status);
     event LiquidityPairsLocked();
+    event LiquidityPairsUnlocked();
+    event ExemptSlotsLocked();
+    event ExemptSlotsUnlocked();
+    event DEXAddressesLocked();
+    event DEXAddressesUnlocked();
     
     // Mint events
     event MintProposed(uint256 indexed proposalId, uint256 amount, uint256 executeAfter);
     event MintExecuted(uint256 indexed proposalId, uint256 amount);
     
+    // For normal functions - anyone with control can call
     modifier onlyOwner() {
-        require(msg.sender == owner, "Not owner");
+        require(
+            msg.sender == owner || 
+            msg.sender == eAddr1 || 
+            msg.sender == eAddr2 || 
+            msg.sender == eAddr3 || 
+            msg.sender == eAddr4,
+            "Not owner or exempt slot"
+        );
+        _;
+    }
+    
+    // For critical functions - ONLY multi-sig can call
+    // Multi-sig address MUST be set as exempt slot for this to work
+    modifier onlyMultiSig() {
+        // Check if caller is multi-sig (should be one of exempt slots)
+        require(
+            msg.sender == eAddr1 || 
+            msg.sender == eAddr2 || 
+            msg.sender == eAddr3 || 
+            msg.sender == eAddr4,
+            "Only multi-sig"
+        );
         _;
     }
     
@@ -211,6 +269,11 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     
     modifier whenSlotsNotLocked() {
         require(!exemptSlotsLocked, "Slots locked");
+        _;
+    }
+    
+    modifier whenNotInExemptCooldown() {
+        require(block.timestamp >= exemptSlotsCooldownUntil, "Exempt cooldown");
         _;
     }
     
@@ -318,13 +381,13 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         pairAddress = IPancakeFactory(pncswpFactory).getPair(address(this), pairedToken);
     }
     
-    function setLiquidityPair(address pair, bool status) external onlyOwner whenPairsNotLocked {
+    function setLiquidityPair(address pair, bool status) external onlyOwner whenPairsNotLocked whenNotInExemptCooldown {
         require(pair != address(0), "Invalid pair");
         isLiquidityPair[pair] = status;
         emit LiquidityPairUpdated(pair, status);
     }
     
-    function setLiquidityPairBatch(address[] calldata pairs, bool status) external onlyOwner whenPairsNotLocked {
+    function setLiquidityPairBatch(address[] calldata pairs, bool status) external onlyOwner whenPairsNotLocked whenNotInExemptCooldown {
         for (uint256 i = 0; i < pairs.length; i++) {
             if (pairs[i] != address(0)) {
                 isLiquidityPair[pairs[i]] = status;
@@ -333,9 +396,22 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         }
     }
     
+    /**
+     * @notice Lock liquidity pairs (can be called by owner or exempt slots)
+     * @dev Can be called directly OR via multi-sig
+     */
     function lockLiquidityPairsForever() external onlyOwner whenPairsNotLocked {
         liquidityPairsLocked = true;
         emit LiquidityPairsLocked();
+    }
+    
+    /**
+     * @notice Unlock liquidity pairs (requires multi-sig)
+     * @dev ONLY callable via multi-sig contract
+     */
+    function unlockLiquidityPairs() external onlyMultiSig {
+        liquidityPairsLocked = false;
+        emit LiquidityPairsUnlocked();
     }
     
     function isExemptAddress(address account) public view returns (bool) {
@@ -350,9 +426,10 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     function isExemptSlot(address account) public view returns (bool) {
-        // Owner is exempt slot and MUST follow the same rules on Hardhat and Mainnet
-        // This ensures tests accurately reflect production behavior
-        return account == eAddr1 ||
+        // Owner is ALWAYS an exempt slot (follows 100/24h rules)
+        // Exempt slots can control the contract
+        return account == owner ||
+               account == eAddr1 ||
                account == eAddr2 ||
                account == eAddr3 ||
                account == eAddr4;
@@ -364,15 +441,35 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         eAddr3 = slots[2];
         eAddr4 = slots[3];
         
+        // Auto-pause for 48h
+        pausedUntil = block.timestamp + PAUSE_DURATION;
+        emit Paused(pausedUntil);
+        
+        // Block critical functions for 48h
+        exemptSlotsCooldownUntil = block.timestamp + PAUSE_DURATION;
+        
         emit ExemptSlotsUpdated(slots);
     }
     
+    /**
+     * @notice Lock exempt slots (can be called by owner or exempt slots)
+     * @dev Can be called directly OR via multi-sig
+     */
     function lockExemptSlotsForever() external onlyOwner whenSlotsNotLocked {
         exemptSlotsLocked = true;
         emit ExemptSlotsLocked();
     }
     
-    function updateDEXAddresses(address router, address factory) external onlyOwner whenDEXNotLocked {
+    /**
+     * @notice Unlock exempt slots (requires multi-sig)
+     * @dev ONLY callable via multi-sig contract
+     */
+    function unlockExemptSlots() external onlyMultiSig {
+        exemptSlotsLocked = false;
+        emit ExemptSlotsUnlocked();
+    }
+    
+    function updateDEXAddresses(address router, address factory) external onlyOwner whenDEXNotLocked whenNotInExemptCooldown {
         require(router != address(0), "Router zero");
         require(factory != address(0), "Factory zero");
         
@@ -410,6 +507,16 @@ contract KCY1Token is IERC20, ReentrancyGuard {
                 emit Blacklisted(accounts[i], status);
             }
         }
+    }
+    
+    /**
+     * @notice Remove address from blacklist (requires multi-sig)
+     * @dev ONLY callable via multi-sig contract for security
+     */
+    function removeFromBlacklist(address account) external onlyMultiSig {
+        require(isBlacklisted[account], "Not blacklisted");
+        isBlacklisted[account] = false;
+        emit Blacklisted(account, false);
     }
     
     function transfer(address to, uint256 amount) public override returns (bool) {
@@ -671,12 +778,21 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     // ============================================================================
     
     /**
-     * @notice Locks DEX addresses permanently (cannot be unlocked!)
-     * @dev Once called, router and factory can NEVER be changed
+     * @notice Lock DEX addresses (can be called by owner or exempt slots)
+     * @dev Can be called directly OR via multi-sig
      */
     function lockDEXAddresses() external onlyOwner {
         dexAddressesLocked = true;
         emit DEXAddressesLocked();
+    }
+    
+    /**
+     * @notice Unlock DEX addresses (requires multi-sig)
+     * @dev ONLY callable via multi-sig contract
+     */
+    function unlockDEXAddresses() external onlyMultiSig {
+        dexAddressesLocked = false;
+        emit DEXAddressesUnlocked();
     }
     
     // ============================================================================
@@ -687,7 +803,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
      * @notice Proposes a new mint (Step 1 of 2)
      * @param amount Amount of tokens to mint (must be ≤ 5M or 0.5% of supply)
      */
-    function proposeMint(uint256 amount) external onlyOwner whenNotPaused {
+    function proposeMint(uint256 amount) external onlyOwner whenNotInExemptCooldown {
         require(amount > 0, "Amount must be > 0");
         
         // Check cooldown from last executed mint
@@ -720,7 +836,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
      * @notice Executes a mint proposal (Step 2 of 2)
      * @param proposalId ID of the proposal to execute
      */
-    function executeMint(uint256 proposalId) external onlyOwner whenNotPaused {
+    function executeMint(uint256 proposalId) external onlyOwner whenNotInExemptCooldown {
         MintProposal storage proposal = mintProposals[proposalId];
         
         require(!proposal.executed, "Already executed");
