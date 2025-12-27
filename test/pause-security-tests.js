@@ -376,7 +376,108 @@ describe("KCY1 Token - Pause, Security & Cooldown Tests", function() {
         });
     });
     
-    describe("6. Multi-Sig Security - Only MY Multi-Sig", function() {
+    describe("6. updateDEXAddresses Auto-Pause & Cooldown", function() {
+        it("Should auto-pause for 48h when updating DEX addresses", async function() {
+            // Check not paused
+            expect(await token.isPaused()).to.equal(false);
+            
+            const newRouter = addr3.address;
+            const newFactory = addr4.address;
+            
+            // Update DEX addresses
+            await token.updateDEXAddresses(newRouter, newFactory);
+            
+            // Should be paused
+            expect(await token.isPaused()).to.equal(true);
+            console.log("✅ Auto-paused after updateDEXAddresses");
+            
+            // Check pause duration
+            const pausedUntil = await token.pausedUntil();
+            const now = await time.latest();
+            expect(pausedUntil - now).to.be.closeTo(48 * 3600, 10);
+            console.log("✅ Paused for 48 hours");
+        });
+        
+        it("Should block propose/execute mint during DEX update cooldown", async function() {
+            const newRouter = addr3.address;
+            const newFactory = addr4.address;
+            
+            // Update DEX
+            await token.updateDEXAddresses(newRouter, newFactory);
+            
+            // Wait for pause to end
+            await time.increase(48 * 3600 + 1);
+            
+            // proposeMint should still be blocked (cooldown)
+            await expect(
+                token.proposeMint(ethers.parseEther("1000"))
+            ).to.be.revertedWith("Exempt cooldown");
+            
+            console.log("✅ proposeMint blocked during DEX update cooldown");
+        });
+        
+        it("Should block updateExemptSlots during DEX update cooldown", async function() {
+            const newRouter = addr3.address;
+            const newFactory = addr4.address;
+            
+            // Update DEX
+            await token.updateDEXAddresses(newRouter, newFactory);
+            
+            // Wait for pause to end
+            await time.increase(48 * 3600 + 1);
+            
+            // updateExemptSlots should be blocked (cooldown)
+            await expect(
+                token.updateExemptSlots([
+                    addr2.address,
+                    ethers.ZeroAddress,
+                    ethers.ZeroAddress,
+                    ethers.ZeroAddress
+                ])
+            ).to.be.revertedWith("Exempt cooldown");
+            
+            console.log("✅ updateExemptSlots blocked during DEX update cooldown");
+        });
+        
+        it("Should block another updateDEXAddresses during cooldown", async function() {
+            const newRouter = addr3.address;
+            const newFactory = addr4.address;
+            
+            // Update DEX first time
+            await token.updateDEXAddresses(newRouter, newFactory);
+            
+            // Wait for pause to end
+            await time.increase(48 * 3600 + 1);
+            
+            // Try to update DEX again (should be blocked by cooldown)
+            await expect(
+                token.updateDEXAddresses(addr2.address, addr1.address)
+            ).to.be.revertedWith("Exempt cooldown");
+            
+            console.log("✅ updateDEXAddresses blocked during cooldown");
+        });
+        
+        it("Should allow all functions after 48h DEX update cooldown", async function() {
+            const newRouter = addr3.address;
+            const newFactory = addr4.address;
+            
+            // Update DEX
+            await token.updateDEXAddresses(newRouter, newFactory);
+            
+            // Wait 48h
+            await time.increase(48 * 3600 + 1);
+            
+            // Pause should be over
+            expect(await token.isPaused()).to.equal(false);
+            
+            // Functions should work again
+            await token.proposeMint(ethers.parseEther("1000"));
+            
+            console.log("✅ All functions allowed after 48h DEX update cooldown");
+        });
+    });
+    
+    describe("7. Multi-Sig Security - Only MY Multi-Sig", function() {
         it("Should verify only exempt slots (multi-sig addresses) can call onlyMultiSig", async function() {
             // Setup: addr1 is exempt slot (multi-sig address)
             // Lock DEX
@@ -426,7 +527,7 @@ describe("KCY1 Token - Pause, Security & Cooldown Tests", function() {
         });
     });
     
-    describe("7. Summary & Security Report", function() {
+    describe("8. Summary & Security Report", function() {
         it("Should display complete security summary", async function() {
             console.log("\n" + "=".repeat(60));
             console.log("SECURITY & PAUSE TESTS SUMMARY");
@@ -463,6 +564,13 @@ describe("KCY1 Token - Pause, Security & Cooldown Tests", function() {
             console.log("   • Blocks propose/execute mint");
             console.log("   • Blocks updateDEXAddresses");
             console.log("   • Blocks setLiquidityPair");
+            console.log("   • Functions resume after 48h");
+            
+            console.log("\n✅ updateDEXAddresses:");
+            console.log("   • Auto-pauses for 48h");
+            console.log("   • Blocks propose/execute mint");
+            console.log("   • Blocks updateExemptSlots");
+            console.log("   • Blocks another updateDEXAddresses");
             console.log("   • Functions resume after 48h");
             
             console.log("\n✅ Multi-sig security:");

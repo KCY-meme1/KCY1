@@ -161,7 +161,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     uint256 public constant MAX_EXEMPT_TO_NORMAL = 100 * 10**18;
     uint256 public constant EXEMPT_TO_NORMAL_COOLDOWN = 24 hours;
     
-    uint256 public pausedUntil;
+    uint256 public NotExemptTradeTransferPausedUntil;
     
     address public eAddr1;
     address public eAddr2;
@@ -172,7 +172,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     address public pncswpFactory;
     
     bool public exemptSlotsLocked;
-    uint256 public exemptSlotsCooldownUntil;  // Cooldown after updateExemptSlots
+    uint256 public mainAddressChangersCooldown;  // Cooldown for updateExemptSlots/updateDEX/setLiquidityPair
     
     mapping(address => bool) public isLiquidityPair;
     bool public liquidityPairsLocked;
@@ -226,9 +226,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     event LiquidityPairUpdated(address indexed pair, bool status);
     event LiquidityPairsLocked();
     event LiquidityPairsUnlocked();
-    event ExemptSlotsLocked();
     event ExemptSlotsUnlocked();
-    event DEXAddressesLocked();
     event DEXAddressesUnlocked();
     
     // Mint events
@@ -272,8 +270,8 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         _;
     }
     
-    modifier whenNotInExemptCooldown() {
-        require(block.timestamp >= exemptSlotsCooldownUntil, "Exempt cooldown");
+    modifier whenNotInMainAddressChangersCooldown() {
+        require(block.timestamp >= mainAddressChangersCooldown, "Address changers cooldown");
         _;
     }
     
@@ -381,19 +379,34 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         pairAddress = IPancakeFactory(pncswpFactory).getPair(address(this), pairedToken);
     }
     
-    function setLiquidityPair(address pair, bool status) external onlyOwner whenPairsNotLocked whenNotInExemptCooldown {
+    function setLiquidityPair(address pair, bool status) external onlyOwner whenPairsNotLocked whenNotInMainAddressChangersCooldown {
         require(pair != address(0), "Invalid pair");
         isLiquidityPair[pair] = status;
+        
+        // Auto-pause for 48h (security measure when changing liquidity pairs)
+        NotExemptTradeTransferPausedUntil = block.timestamp + PAUSE_DURATION;
+        emit Paused(NotExemptTradeTransferPausedUntil);
+        
+        // Block critical functions for 48h
+        mainAddressChangersCooldown = block.timestamp + PAUSE_DURATION;
+        
         emit LiquidityPairUpdated(pair, status);
     }
     
-    function setLiquidityPairBatch(address[] calldata pairs, bool status) external onlyOwner whenPairsNotLocked whenNotInExemptCooldown {
+    function setLiquidityPairBatch(address[] calldata pairs, bool status) external onlyOwner whenPairsNotLocked whenNotInMainAddressChangersCooldown {
         for (uint256 i = 0; i < pairs.length; i++) {
             if (pairs[i] != address(0)) {
                 isLiquidityPair[pairs[i]] = status;
                 emit LiquidityPairUpdated(pairs[i], status);
             }
         }
+        
+        // Auto-pause for 48h (security measure when changing liquidity pairs)
+        NotExemptTradeTransferPausedUntil = block.timestamp + PAUSE_DURATION;
+        emit Paused(NotExemptTradeTransferPausedUntil);
+        
+        // Block critical functions for 48h
+        mainAddressChangersCooldown = block.timestamp + PAUSE_DURATION;
     }
     
     /**
@@ -442,11 +455,11 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         eAddr4 = slots[3];
         
         // Auto-pause for 48h
-        pausedUntil = block.timestamp + PAUSE_DURATION;
-        emit Paused(pausedUntil);
+        NotExemptTradeTransferPausedUntil = block.timestamp + PAUSE_DURATION;
+        emit Paused(NotExemptTradeTransferPausedUntil);
         
         // Block critical functions for 48h
-        exemptSlotsCooldownUntil = block.timestamp + PAUSE_DURATION;
+        mainAddressChangersCooldown = block.timestamp + PAUSE_DURATION;
         
         emit ExemptSlotsUpdated(slots);
     }
@@ -469,24 +482,31 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         emit ExemptSlotsUnlocked();
     }
     
-    function updateDEXAddresses(address router, address factory) external onlyOwner whenDEXNotLocked whenNotInExemptCooldown {
+    function updateDEXAddresses(address router, address factory) external onlyOwner whenDEXNotLocked whenNotInMainAddressChangersCooldown {
         require(router != address(0), "Router zero");
         require(factory != address(0), "Factory zero");
         
         pncswpRouter = router;
         pncswpFactory = factory;
         
+        // Auto-pause for 48h (security measure when changing DEX)
+        NotExemptTradeTransferPausedUntil = block.timestamp + PAUSE_DURATION;
+        emit Paused(NotExemptTradeTransferPausedUntil);
+        
+        // Block critical functions for 48h
+        mainAddressChangersCooldown = block.timestamp + PAUSE_DURATION;
+        
         emit DEXAddressesUpdated(router, factory);
     }
     
     function isPaused() public view returns (bool) {
-        return block.timestamp < pausedUntil;
+        return block.timestamp < NotExemptTradeTransferPausedUntil;
     }
     
     function pause() external onlyOwner {
-        require(pausedUntil <= block.timestamp, "Paused");
-        pausedUntil = block.timestamp + PAUSE_DURATION;
-        emit Paused(pausedUntil);
+        require(NotExemptTradeTransferPausedUntil <= block.timestamp, "Paused");
+        NotExemptTradeTransferPausedUntil = block.timestamp + PAUSE_DURATION;
+        emit Paused(NotExemptTradeTransferPausedUntil);
     }
     
     function setBlacklist(address account, bool status) external onlyOwner {
@@ -724,7 +744,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     
     function timeUntilUnpaused() public view returns (uint256) {
         if (!isPaused()) return 0;
-        return pausedUntil - block.timestamp;
+        return NotExemptTradeTransferPausedUntil - block.timestamp;
     }
     
     function getExemptAddresses() external view returns (
@@ -803,7 +823,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
      * @notice Proposes a new mint (Step 1 of 2)
      * @param amount Amount of tokens to mint (must be ≤ 5M or 0.5% of supply)
      */
-    function proposeMint(uint256 amount) external onlyOwner whenNotInExemptCooldown {
+    function proposeMint(uint256 amount) external onlyOwner whenNotInMainAddressChangersCooldown {
         require(amount > 0, "Amount must be > 0");
         
         // Check cooldown from last executed mint
@@ -836,7 +856,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
      * @notice Executes a mint proposal (Step 2 of 2)
      * @param proposalId ID of the proposal to execute
      */
-    function executeMint(uint256 proposalId) external onlyOwner whenNotInExemptCooldown {
+    function executeMint(uint256 proposalId) external onlyOwner whenNotInMainAddressChangersCooldown {
         MintProposal storage proposal = mintProposals[proposalId];
         
         require(!proposal.executed, "Already executed");
