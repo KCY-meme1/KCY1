@@ -17,6 +17,7 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
     let addr1, addr2, addr3;
     
     const TRADING_LOCK = 48 * 60 * 60;
+	const AFTER_ADMIN_LOCK = 48 * 60 * 60 + 1;
     const COOLDOWN = 2 * 60 * 60;
     
     beforeEach(async function() {
@@ -44,11 +45,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
                     );
                     
                     // Setup: Give addr1 some tokens as exempt
-                    await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                                   ethers.ZeroAddress, ethers.ZeroAddress]);
+                    await token.updateExemptSlot(6, addr1.address);
+					await time.increase(AFTER_ADMIN_LOCK);
                     await token.transfer(addr1.address, ethers.parseEther("10000"));
-                    await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                                   ethers.ZeroAddress, ethers.ZeroAddress]);
+                    await token.updateExemptSlot(6, owner.address);
+					await time.increase(AFTER_ADMIN_LOCK);
                     
                     const supplyBefore = await token.totalSupply();
                     const balanceBefore = await token.balanceOf(addr1.address);
@@ -79,11 +80,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
                     );
                     
                     // Setup
-                    await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                                   ethers.ZeroAddress, ethers.ZeroAddress]);
+                    await token.updateExemptSlot(6, addr1.address);
+					await time.increase(AFTER_ADMIN_LOCK);
                     await token.transfer(addr1.address, randomAmount);
-                    await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                                   ethers.ZeroAddress, ethers.ZeroAddress]);
+                    await token.updateExemptSlot(6, owner.address);
+					await time.increase(AFTER_ADMIN_LOCK);
                     
                     // Calculate expected fees
                     const burnFee = (randomAmount * 30n) / 100000n;
@@ -117,11 +118,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             it("Should handle 1 wei transfer", async function() {
                 const amount = 1n;
                 
-                await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                await token.updateExemptSlot(6, addr1.address);
+				await time.increase(AFTER_ADMIN_LOCK);
                 await token.transfer(addr1.address, ethers.parseEther("1000"));
-                await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                await token.updateExemptSlot(6, owner.address);
+				await time.increase(AFTER_ADMIN_LOCK);
                 
                 const burnFee = (amount * 30n) / 100000n; // Should be 0 due to rounding
                 const ownerFee = (amount * 50n) / 100000n; // Should be 0 due to rounding
@@ -135,11 +136,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             it("Should handle exactly max transaction amount (2000 tokens)", async function() {
                 const maxAmount = ethers.parseEther("2000");
                 
-                await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                await token.updateExemptSlot(6, addr1.address);
+				await time.increase(AFTER_ADMIN_LOCK);
                 await token.transfer(addr1.address, ethers.parseEther("10000"));
-                await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                await token.updateExemptSlot(6, owner.address);
+				await time.increase(AFTER_ADMIN_LOCK);
                 
                 // Should succeed at exactly the limit
                 await token.connect(addr1).transfer(addr2.address, maxAmount);
@@ -156,11 +157,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             });
             
             it("Should handle exactly max wallet amount (4000 tokens)", async function() {
-                await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                await token.updateExemptSlot(6, addr1.address);
+				await time.increase(AFTER_ADMIN_LOCK);
                 await token.transfer(addr1.address, ethers.parseEther("10000"));
-                await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+                await token.updateExemptSlot(6, owner.address);
+				await time.increase(AFTER_ADMIN_LOCK);
                 
                 // Send 2000 tokens twice to reach ~3996.8
                 await token.connect(addr1).transfer(addr2.address, ethers.parseEther("2000"));
@@ -192,8 +193,10 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             // and that all vulnerable functions use the modifier
             
             // Basic test: Multiple transfers in quick succession should work
-            await token.updateExemptSlots([addr1.address, addr2.address, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(7, addr2.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("5000"));
             
             // These should all succeed (no reentrancy)
@@ -234,8 +237,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             await time.increase(48 * 60 * 60 + 1);
             
             // Make token contract address exempt slot in mockToken so we can send > 100 tokens
-            await mockToken.updateExemptSlots([await token.getAddress(), ethers.ZeroAddress, 
-                                               ethers.ZeroAddress, ethers.ZeroAddress]);
+            await mockToken.updateExemptSlot(6, await token.getAddress());
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // Send some mock tokens to the main contract (exempt → exempt = no fees)
             const sendAmount = ethers.parseEther("1000");
@@ -263,11 +266,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
     
     describe("3. GAS BENCHMARKS", function() {
         it("3.1 Should measure gas for normal transfer", async function() {
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("10000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             const tx = await token.connect(addr1).transfer(
                 addr2.address, 
@@ -283,8 +286,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         
         it("3.2 Should measure gas for exempt transfer", async function() {
             // Make addr1 exempt slot for exempt→exempt transfer
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             const tx = await token.transfer(addr1.address, ethers.parseEther("1000"));
             const receipt = await tx.wait();
@@ -296,8 +299,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         });
         
         it("3.3 Should measure gas for approve", async function() {
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("1000"));
             
             const tx = await token.connect(addr1).approve(
@@ -313,11 +316,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         });
         
         it("3.4 Should measure gas for transferFrom", async function() {
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("10000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             await token.connect(addr1).approve(addr2.address, ethers.parseEther("1000"));
             
@@ -336,10 +339,13 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             expect(receipt.gasUsed).to.be.lt(130000n);
         });
         
-        it("3.5 Should measure gas for updateExemptSlots", async function() {
-            const tx = await token.updateExemptSlots(
-                [addr1.address, addr2.address, addr3.address, ethers.ZeroAddress]
-            );
+        it("3.5 Should measure gas for updateExemptSlot", async function() {
+            const tx = await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(7, addr2.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(8, addr3.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             const receipt = await tx.wait();
             
             console.log(`      📊 UpdateExemptSlots gas: ${receipt.gasUsed}`);
@@ -350,8 +356,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         
         it("3.6 Should compare gas: exempt vs normal transfer", async function() {
             // Make addr1 exempt slot for first transfer
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // Exempt transfer (owner → addr1, both exempt)
             const tx1 = await token.transfer(addr1.address, ethers.parseEther("1000"));
@@ -361,8 +367,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             await token.transfer(addr1.address, ethers.parseEther("5000"));
             
             // Remove addr1 from exempt slots (now normal user)
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // Normal transfer (addr1 normal → addr2 normal)
             const tx2 = await token.connect(addr1).transfer(
@@ -390,11 +396,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             const initialSupply = await token.totalSupply();
             
             // Do multiple operations
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("10000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
             await time.increase(COOLDOWN + 1);
@@ -407,11 +413,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         });
         
         it("4.2 Invariant: Balance changes = transfer amounts (accounting for fees)", async function() {
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("10000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             const addr1Before = await token.balanceOf(addr1.address);
             const addr2Before = await token.balanceOf(addr2.address);
@@ -437,11 +443,11 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         });
         
         it("4.3 Invariant: Cooldown always enforced for normal users", async function() {
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("10000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // First transfer succeeds
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
@@ -462,8 +468,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
         
         it("4.4 Invariant: Exempt users never have cooldown", async function() {
             // Make addr1 exempt slot
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // Multiple exempt transfers in quick succession
             // Owner (exempt slot) → addr1 (exempt slot): no fees, no cooldown

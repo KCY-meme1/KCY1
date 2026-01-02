@@ -16,6 +16,7 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     let addr4, addr5; // Additional addresses for tests that need fresh addresses
     
     const TRADING_LOCK = 48 * 60 * 60;
+    const AFTER_ADMIN_LOCK = 48 * 60 * 60 + 1;
     const COOLDOWN = 2 * 60 * 60;
     const EXEMPT_TO_NORMAL_COOLDOWN = 24 * 60 * 60;
     
@@ -30,9 +31,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     describe("1. TransferFrom Edge Cases", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("5000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
         });
         
         it("1.1 Should handle transferFrom with fees", async function() {
@@ -60,7 +63,10 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         });
         
         it("1.3 Should handle transferFrom between exempt addresses", async function() {
-            await token.updateExemptSlots([exemptAddr1.address, exemptAddr2.address, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, exemptAddr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(7, exemptAddr2.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             await token.transfer(exemptAddr1.address, ethers.parseEther("1000"));
             
@@ -87,8 +93,15 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         });
         
         it("2.1 Should handle all 4 slots filled", async function() {
-            const slots = [exemptAddr1.address, exemptAddr2.address, addr1.address, addr2.address];
-            await token.updateExemptSlots(slots);
+            // Update slots 6-9 with exempt addresses
+            await token.updateExemptSlot(6, exemptAddr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(7, exemptAddr2.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(8, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(9, addr2.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             expect(await token.isExemptAddress(exemptAddr1.address)).to.equal(true);
             expect(await token.isExemptAddress(exemptAddr2.address)).to.equal(true);
@@ -97,7 +110,10 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         });
         
         it("2.2 Should transfer between exempt slots with NO fees", async function() {
-            await token.updateExemptSlots([exemptAddr1.address, exemptAddr2.address, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, exemptAddr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(7, exemptAddr2.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             await token.transfer(exemptAddr1.address, ethers.parseEther("1000"));
             
@@ -108,11 +124,13 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         });
         
         it("2.3 Should handle exempt slot replaced while holding tokens", async function() {
-            await token.updateExemptSlots([exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, exemptAddr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(exemptAddr1.address, ethers.parseEther("1000"));
             
             // Replace exemptAddr1 with exemptAddr2
-            await token.updateExemptSlots([exemptAddr2.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, exemptAddr2.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // exemptAddr1 is now normal, should have fees
             const amount = ethers.parseEther("100");
@@ -128,9 +146,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     describe("3. Cooldown Boundary Tests", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("5000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
         });
         
         it("3.1 Should succeed exactly at 2 hour cooldown", async function() {
@@ -173,7 +193,8 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         
         it("3.4 Should succeed exactly at 24 hour exempt→normal cooldown", async function() {
             // Setup: exemptAddr1 as sender
-            await token.updateExemptSlots([exemptAddr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, exemptAddr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(exemptAddr1.address, ethers.parseEther("500"));
             
             // First exempt→normal transfer (exemptAddr1 → addr4 who is completely fresh)
@@ -193,9 +214,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     describe("4. Allowance Edge Cases", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("1000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
         });
         
         it("4.1 Should handle increaseAllowance", async function() {
@@ -231,9 +254,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     describe("5. Small Amount Transfers", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("1000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
         });
         
         it("5.1 Should handle 1 wei transfer with fees", async function() {
@@ -280,9 +305,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             }
             
             // Don't increase time, we're already before tradingEnabledTime from deployment
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("1000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             await expect(
                 token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
@@ -293,9 +320,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             const tradingTime = await token.tradingEnabledTime();
             await time.increaseTo(Number(tradingTime));
             
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("1000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             await token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"));
             
@@ -325,7 +354,10 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             
             // Make BOTH addr1 AND pairAddr exempt
             // This way addr1 → pairAddr is exempt to exempt (no limits)
-            await token.updateExemptSlots([addr1.address, pairAddr, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
+            await token.updateExemptSlot(7, pairAddr);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // Transfer to addr1 (exempt to exempt = no fees, no limits)
             await token.transfer(addr1.address, ethers.parseEther("1000"));
@@ -342,8 +374,8 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             await token.setLiquidityPair(pairAddr, true);
             
             // Make pair exempt slot so owner can send tokens to it
-            await token.updateExemptSlots([pairAddr, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, pairAddr);
+			await time.increase(AFTER_ADMIN_LOCK);
             
             // Setup: owner sends to pair (exempt → exempt)
             await token.transfer(pairAddr, ethers.parseEther("1000"));
@@ -362,18 +394,18 @@ describe("KCY1 Token v33 - Edge Cases", function() {
 			await token.setLiquidityPair(pairAddr, true);
 			
 			// Make pair exempt slot so owner can send tokens to it
-			await token.updateExemptSlots([pairAddr, ethers.ZeroAddress, 
-			                               ethers.ZeroAddress, ethers.ZeroAddress]);
+			await token.updateExemptSlot(6, pairAddr);
+			await time.increase(AFTER_ADMIN_LOCK);
 			
 			// Owner sends tokens to pair (exempt → exempt)
 			await token.transfer(pairAddr, ethers.parseEther("1000"));
 			
 			// Make addr1 exempt slot to give it tokens
-			await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-			                               ethers.ZeroAddress, ethers.ZeroAddress]);
+			await token.updateExemptSlot(6, addr1.address);
+			await time.increase(AFTER_ADMIN_LOCK);
 			await token.transfer(addr1.address, ethers.parseEther("500"));
-			await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-			                               ethers.ZeroAddress, ethers.ZeroAddress]);
+			await token.updateExemptSlot(6, owner.address);
+			await time.increase(AFTER_ADMIN_LOCK);
 			
 			// Create approval from pair to addr1 using impersonation
 			await ethers.provider.send("hardhat_impersonateAccount", [pairAddr]);
@@ -401,9 +433,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     describe("8. Blacklist + Pause Combinations", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("1000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
         });
         
         it("8.1 Should block blacklisted user even if not paused", async function() {
@@ -509,11 +543,11 @@ describe("KCY1 Token v33 - Edge Cases", function() {
             await time.increase(TRADING_LOCK + 1);
             
             // Setup: Give addr1 tokens as exempt
-            await token.updateExemptSlots([addr1.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("20000"));
-            await token.updateExemptSlots([ethers.ZeroAddress, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
         });
         
         it("8.1 User с 3999.5 токена получава 1 токен - трябва да FAIL", async function() {
@@ -639,8 +673,8 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         
         it("8.6 Exempt slot спазва max wallet към пълен user", async function() {
             // Setup exempt slot
-            await token.updateExemptSlots([addr3.address, ethers.ZeroAddress, 
-                                           ethers.ZeroAddress, ethers.ZeroAddress]);
+            await token.updateExemptSlot(6, addr3.address);
+			await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr3.address, ethers.parseEther("1000"));
             
             // Fill addr2 to 3999 tokens
