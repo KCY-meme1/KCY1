@@ -18,10 +18,12 @@ describe("ТАБЛИЦА 4: Liquidity Scenarios (DEX Operations)", function() {
     let router, factory, liquidityPair;
     
     const PAUSE_DURATION = 48 * 3600;
+    const AFTER_ADMIN_LOCK = 48 * 60 * 60 + 1;
     const COOLDOWN_2H = 2 * 3600;
     
     async function buyFromDEX(buyer, amount) {
-        await token.connect(liquidityPair).transfer(buyer.address, amount);
+        await token.connect(liquidityPair).approve(router.address, amount);
+        await token.connect(router).transferFrom(liquidityPair.address, buyer.address, amount);
     }
     
     beforeEach(async function() {
@@ -33,16 +35,21 @@ describe("ТАБЛИЦА 4: Liquidity Scenarios (DEX Operations)", function() {
         
         // Setup DEX addresses
         await token.updateDEXAddresses(router.address, factory.address);
-        await time.increase(PAUSE_DURATION + 1);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
+        // Setup exempt slots (including liquidityPair)
+        await token.updateExemptSlot(7, exempt1.address);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
+        await token.updateExemptSlot(8, exempt2.address);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
+        await token.updateExemptSlot(9, liquidityPair.address);
+        await time.increase(AFTER_ADMIN_LOCK);
         
         // Setup liquidity pair
         await token.setLiquidityPair(liquidityPair.address, true);
-        await time.increase(PAUSE_DURATION + 1);
-        
-        // Setup exempt slots
-        await token.updateExemptSlot(7, exempt1.address);
-        await token.updateExemptSlot(8, exempt2.address);
-        await time.increase(PAUSE_DURATION + 1);
+        await time.increase(AFTER_ADMIN_LOCK);
         
         // Enable trading
         const tradingTime = await token.tradingEnabledTime();
@@ -56,10 +63,10 @@ describe("ТАБЛИЦА 4: Liquidity Scenarios (DEX Operations)", function() {
         await token.transfer(liquidityPair.address, ethers.parseEther("1000000"));
         
         // Give normal users tokens
-        await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+        await buyFromDEX(normal1, ethers.parseEther("2000"));
         await time.increase(COOLDOWN_2H + 1);
         
-        await buyFromDEX(normal2.address, ethers.parseEther("2000"));
+        await buyFromDEX(normal2, ethers.parseEther("2000"));
         await time.increase(COOLDOWN_2H + 1);
     });
     

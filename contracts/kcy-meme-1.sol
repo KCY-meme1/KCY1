@@ -647,7 +647,7 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         }
         
         bool isNormalTransaction = !fromExempt || !toExempt;
-        bool isExemptSlotToNormal = fromExemptSlot && !toExempt;
+        bool isExemptSlotToNormal = fromExemptSlot && !toExempt && msg.sender != pncswpRouter;
         
         // ADMIN COOLDOWN CHECK - Blocks ALL transfers (even Exempt → Exempt!)
         // This is set when updateExemptSlot/updateDEXAddresses/setLiquidityPair is called

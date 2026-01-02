@@ -17,6 +17,7 @@ describe("DISTRIBUTION SCENARIOS", function() {
     let owner, wallet1, wallet2, wallet3;
     
     const PAUSE_DURATION = 48 * 3600;
+    const AFTER_ADMIN_LOCK = 48 * 60 * 60 + 1;
     const TOTAL_SUPPLY = ethers.parseEther("100000000"); // 100M
     const OWNER_BALANCE = ethers.parseEther("96000000"); // 96M
     const CONTRACT_BALANCE = ethers.parseEther("4000000"); // 4M
@@ -54,12 +55,16 @@ describe("DISTRIBUTION SCENARIOS", function() {
         beforeEach(async function() {
             // Make all wallets exempt
             await token.updateExemptSlot(6, owner.address);
-            await token.updateExemptSlot(7, wallet1.address);
-            await token.updateExemptSlot(8, wallet2.address);
-            await token.updateExemptSlot(9, wallet3.address);
+            await time.increase(AFTER_ADMIN_LOCK);
             
-            // Wait for admin cooldown
-            await time.increase(PAUSE_DURATION + 1);
+            await token.updateExemptSlot(7, wallet1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
+            
+            await token.updateExemptSlot(8, wallet2.address);
+            await time.increase(AFTER_ADMIN_LOCK);
+            
+            await token.updateExemptSlot(9, wallet3.address);
+            await time.increase(AFTER_ADMIN_LOCK);
         });
         
         it("Should transfer millions without fees", async function() {
@@ -121,10 +126,11 @@ describe("DISTRIBUTION SCENARIOS", function() {
     describe("Mixed Distribution (Exempt and Normal)", function() {
         beforeEach(async function() {
             await token.updateExemptSlot(6, owner.address);
-            await token.updateExemptSlot(7, wallet1.address);
-            // wallet2 and wallet3 are NORMAL
+            await time.increase(AFTER_ADMIN_LOCK);
             
-            await time.increase(PAUSE_DURATION + 1);
+            await token.updateExemptSlot(7, wallet1.address);
+            await time.increase(AFTER_ADMIN_LOCK);
+            // wallet2 and wallet3 are NORMAL
         });
         
         it("Should distribute to exempt wallets (no fees)", async function() {
@@ -151,8 +157,10 @@ describe("DISTRIBUTION SCENARIOS", function() {
     describe("Total Supply Integrity", function() {
         it("Should NEVER increase total supply", async function() {
             await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
+            
             await token.updateExemptSlot(7, wallet1.address);
-            await time.increase(PAUSE_DURATION + 1);
+            await time.increase(AFTER_ADMIN_LOCK);
             
             const initialSupply = await token.totalSupply();
             
@@ -167,8 +175,10 @@ describe("DISTRIBUTION SCENARIOS", function() {
         
         it("Should decrease total supply due to burn fees on Normal transfers", async function() {
             await token.updateExemptSlot(6, owner.address);
+            await time.increase(AFTER_ADMIN_LOCK);
+            
             await token.updateExemptSlot(7, wallet1.address);
-            await time.increase(PAUSE_DURATION + 1);
+            await time.increase(AFTER_ADMIN_LOCK);
             
             // Give wallet1 some tokens
             await token.transfer(wallet1.address, ethers.parseEther("10000"));

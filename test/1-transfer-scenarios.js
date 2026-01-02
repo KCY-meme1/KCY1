@@ -14,32 +14,45 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", function() {
     let token;
-    let owner, exempt1, exempt2, normal1, normal2, liquidityPair;
+    let owner, exempt1, exempt2, normal1, normal2, router, liquidityPair;
     
     const PAUSE_DURATION = 48 * 3600;
+    const AFTER_ADMIN_LOCK = 48 * 60 * 60 + 1;
     const COOLDOWN_2H = 2 * 3600;
     const COOLDOWN_24H = 24 * 3600;
     
-    // Helper: Simulate realistic DEX purchase
+    // Helper: Simulate realistic DEX purchase (router executes: pool → buyer)
     async function buyFromDEX(buyer, amount) {
         if (amount > ethers.parseEther("2000")) {
             throw new Error("DEX limit: max 2000 tokens per buy");
         }
-        await token.connect(liquidityPair).transfer(buyer.address, amount);
+        // Approve router to spend liquidityPair's tokens
+        await token.connect(liquidityPair).approve(router.address, amount);
+        // Router executes transferFrom: liquidityPair → buyer
+        await token.connect(router).transferFrom(liquidityPair.address, buyer.address, amount);
     }
     
     beforeEach(async function() {
-        [owner, exempt1, exempt2, normal1, normal2, liquidityPair] = await ethers.getSigners();
+        [owner, exempt1, exempt2, normal1, normal2, router, liquidityPair] = await ethers.getSigners();
         
         const Token = await ethers.getContractFactory("KCY1Token");
         token = await Token.deploy();
         await token.waitForDeployment();
         
+        // Setup router as DEX
+        await token.updateDEXAddresses(router.address, owner.address); // router + dummy factory
+        await time.increase(AFTER_ADMIN_LOCK);
+        
         // Owner is already in slot 1 (from constructor)
-        // Setup test exempt slots (7-8)
+        // Setup test exempt slots (7-9)
         await token.updateExemptSlot(7, exempt1.address);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
         await token.updateExemptSlot(8, exempt2.address);
-        await time.increase(PAUSE_DURATION + 1);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
+        await token.updateExemptSlot(9, liquidityPair.address);
+        await time.increase(AFTER_ADMIN_LOCK);
         
         // Enable trading
         const tradingTime = await token.tradingEnabledTime();
@@ -49,7 +62,7 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
         
         // Setup liquidity pair
         await token.setLiquidityPair(liquidityPair.address, true);
-        await time.increase(PAUSE_DURATION + 1);
+        await time.increase(AFTER_ADMIN_LOCK);
         
         // Initial distribution (owner→exempt = exempt→exempt, no limit)
         await token.transfer(exempt1.address, ethers.parseEther("1000000")); // 1M
@@ -130,10 +143,10 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
     describe("CASE 3: Normal → Exempt", function() {
         it("Should enforce 2000 token MAX limit", async function() {
             // Setup: normal1 buys from DEX (realistic!)
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal1.address, ethers.parseEther("1000")); // Total: 3000
+            await buyFromDEX(normal1, ethers.parseEther("2000")); // Total: ~3992 (after fees)
             await time.increase(COOLDOWN_2H + 1);
             
             // Below limit - OK
@@ -143,15 +156,15 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
             
             await time.increase(COOLDOWN_2H + 1);
             
-            // Above limit - FAIL
+            // Above limit - FAIL (normal1 has ~1992 left, try to send 2001)
             await expect(
-                token.connect(normal1).transfer(exempt1.address, ethers.parseEther("1001"))
+                token.connect(normal1).transfer(exempt1.address, ethers.parseEther("2001"))
             ).to.be.revertedWith("Max 2000");
         });
         
         it("Should apply 0.08% fees", async function() {
             // Setup
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
             const amount = ethers.parseEther("1000");
@@ -169,10 +182,10 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
         
         it("Should enforce 2h sender cooldown", async function() {
             // Setup
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
             // First transfer - OK
@@ -184,7 +197,7 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
             ).to.be.revertedWith("Wait 2h");
             
             // Different sender - OK
-            await buyFromDEX(normal2.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal2, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
             await expect(
@@ -202,50 +215,50 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
     describe("CASE 4: Normal → Normal", function() {
         it("Should enforce 2000 token MAX TX limit", async function() {
             // Setup
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal1.address, ethers.parseEther("2000")); // Total: 4000
+            await buyFromDEX(normal1, ethers.parseEther("2000")); // Total: ~3992
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal2.address, ethers.parseEther("1000"));
+            await buyFromDEX(normal2, ethers.parseEther("1000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            // Below limit - OK
+            // Below limit - OK (send 2000)
             await expect(
                 token.connect(normal1).transfer(normal2.address, ethers.parseEther("2000"))
-            ).to.not.be.reverted; // normal2: ~3000
+            ).to.not.be.reverted; // normal2: ~2996, normal1: ~1992
             
             await time.increase(COOLDOWN_2H + 1);
             
-            // Above limit - FAIL
+            // Above limit - FAIL (try to send 2001, which also exceeds balance ~1992)
             await expect(
                 token.connect(normal1).transfer(normal2.address, ethers.parseEther("2001"))
             ).to.be.revertedWith("Max 2000");
         });
         
         it("Should enforce 4000 token MAX WALLET limit", async function() {
-            // Setup: normal1 has 4000, normal2 has ~3900
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            // Setup: Get normal2 close to 4000 limit
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal1.address, ethers.parseEther("2000")); // normal1: 4000
+            await buyFromDEX(normal1, ethers.parseEther("2000")); // normal1: ~3992
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal2.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal2, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal2.address, ethers.parseEther("1900")); // normal2: ~3900
+            await buyFromDEX(normal2, ethers.parseEther("2000")); // normal2: ~3992
             await time.increase(COOLDOWN_2H + 1);
             
-            // Transfer 100 → normal2 will have ~4000 (OK, at limit)
+            // Transfer small amount → normal2 will be at/near 4000 limit
             await expect(
-                token.connect(normal1).transfer(normal2.address, ethers.parseEther("100"))
-            ).to.not.be.reverted;
+                token.connect(normal1).transfer(normal2.address, ethers.parseEther("8"))
+            ).to.not.be.reverted; // normal2: ~4000
             
             await time.increase(COOLDOWN_2H + 1);
             
-            // Transfer 1 more → normal2 > 4000 (FAIL)
+            // Try to send more → exceeds 4000 wallet limit
             await expect(
                 token.connect(normal1).transfer(normal2.address, ethers.parseEther("1"))
             ).to.be.revertedWith("Max wallet 4k");
@@ -253,7 +266,7 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
         
         it("Should apply 0.08% fees", async function() {
             // Setup
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
             const amount = ethers.parseEther("1000");
@@ -271,10 +284,10 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
         
         it("Should enforce 2h sender cooldown", async function() {
             // Setup
-            await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+            await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal2.address, ethers.parseEther("1000"));
+            await buyFromDEX(normal2, ethers.parseEther("1000"));
             await time.increase(COOLDOWN_2H + 1);
             
             // First transfer - OK

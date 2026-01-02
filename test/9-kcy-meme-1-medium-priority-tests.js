@@ -303,13 +303,13 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 await token.updateExemptSlot(6, addr1.address);
 				await time.increase(AFTER_ADMIN_LOCK);
                 await token.transfer(addr1.address, ethers.parseEther("10000"));
-                await token.updateExemptSlot(6, ethers.ZeroAddress);
+                await token.updateExemptSlot(6, owner.address);
 				await time.increase(AFTER_ADMIN_LOCK);
-				await token.updateExemptSlot(7, ethers.ZeroAddress);
+				await token.updateExemptSlot(7, owner.address);
 				await time.increase(AFTER_ADMIN_LOCK);
-				await token.updateExemptSlot(8, ethers.ZeroAddress);
+				await token.updateExemptSlot(8, owner.address);
 				await time.increase(AFTER_ADMIN_LOCK);
-				await token.updateExemptSlot(9, ethers.ZeroAddress);
+				await token.updateExemptSlot(9, owner.address);
 				await time.increase(AFTER_ADMIN_LOCK);
                 
                 // First transfer succeeds
@@ -565,7 +565,7 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
     describe("4. LONG-RUNNING SCENARIOS", function() {
         it("Should handle operations over extended time period", async function() {
             await token.updateExemptSlot(6, addr1.address);
-            await time.increase(PAUSE_DURATION + 1);
+            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("100000"));
             
             await token.updateExemptSlot(6, owner.address);

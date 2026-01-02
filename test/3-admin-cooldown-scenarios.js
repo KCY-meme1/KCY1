@@ -14,26 +14,37 @@ const { time } = require("@nomicfoundation/hardhat-network-helpers");
 
 describe("ТАБЛИЦА 2: Admin Cooldown Scenarios (48h Admin Cooldown)", function() {
     let token;
-    let owner, exempt1, exempt2, normal1, addr1, addr2, liquidityPair;
+    let owner, exempt1, exempt2, normal1, addr1, addr2, router, liquidityPair;
     
     const PAUSE_DURATION = 48 * 3600;
+    const AFTER_ADMIN_LOCK = 48 * 60 * 60 + 1;
     const COOLDOWN_2H = 2 * 3600;
     
     async function buyFromDEX(buyer, amount) {
-        await token.connect(liquidityPair).transfer(buyer.address, amount);
+        await token.connect(liquidityPair).approve(router.address, amount);
+        await token.connect(router).transferFrom(liquidityPair.address, buyer.address, amount);
     }
     
     beforeEach(async function() {
-        [owner, exempt1, exempt2, normal1, addr1, addr2, liquidityPair] = await ethers.getSigners();
+        [owner, exempt1, exempt2, normal1, addr1, addr2, router, liquidityPair] = await ethers.getSigners();
         
         const Token = await ethers.getContractFactory("KCY1Token");
         token = await Token.deploy();
         await token.waitForDeployment();
         
-        // Setup exempt slots
+        // Setup router
+        await token.updateDEXAddresses(router.address, owner.address);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
+        // Setup exempt slots (including liquidityPair)
         await token.updateExemptSlot(7, exempt1.address);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
         await token.updateExemptSlot(8, exempt2.address);
-        await time.increase(PAUSE_DURATION + 1);
+        await time.increase(AFTER_ADMIN_LOCK);
+        
+        await token.updateExemptSlot(9, liquidityPair.address);
+        await time.increase(AFTER_ADMIN_LOCK);
         
         // Enable trading
         const tradingTime = await token.tradingEnabledTime();
@@ -43,7 +54,7 @@ describe("ТАБЛИЦА 2: Admin Cooldown Scenarios (48h Admin Cooldown)", func
         
         // Setup liquidity pair
         await token.setLiquidityPair(liquidityPair.address, true);
-        await time.increase(PAUSE_DURATION + 1);
+        await time.increase(AFTER_ADMIN_LOCK);
         
         // Distribute tokens
         await token.transfer(exempt1.address, ethers.parseEther("1000000"));
@@ -51,7 +62,7 @@ describe("ТАБЛИЦА 2: Admin Cooldown Scenarios (48h Admin Cooldown)", func
         await token.transfer(liquidityPair.address, ethers.parseEther("10000000"));
         
         // Give normal users tokens
-        await buyFromDEX(normal1.address, ethers.parseEther("2000"));
+        await buyFromDEX(normal1, ethers.parseEther("2000"));
         await time.increase(COOLDOWN_2H + 1);
     });
     
@@ -136,7 +147,7 @@ describe("ТАБЛИЦА 2: Admin Cooldown Scenarios (48h Admin Cooldown)", func
             ).to.not.be.reverted;
         });
         
-        it("lockExemptSlotsForever() should work during cooldown", async function() {
+        it("lockExemptSlots() should work during cooldown", async function() {
             await expect(
                 token.lockExemptSlotsForever()
             ).to.not.be.reverted;
@@ -148,7 +159,7 @@ describe("ТАБЛИЦА 2: Admin Cooldown Scenarios (48h Admin Cooldown)", func
             ).to.not.be.reverted;
         });
         
-        it("lockLiquidityPairsForever() should work during cooldown", async function() {
+        it("lockLiquidityPairs() should work during cooldown", async function() {
             await expect(
                 token.lockLiquidityPairsForever()
             ).to.not.be.reverted;

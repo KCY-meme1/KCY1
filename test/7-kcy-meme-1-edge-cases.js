@@ -23,6 +23,8 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     beforeEach(async function() {
         [owner, addr1, addr2, addr3, exemptAddr1, exemptAddr2, addr4, addr5] = await ethers.getSigners();
         
+        await token.updateExemptSlot(6, addr1.address);
+        await time.increase(AFTER_ADMIN_LOCK);
         const KCY1Token = await ethers.getContractFactory("KCY1Token");
         token = await KCY1Token.deploy();
         await token.waitForDeployment();
@@ -31,8 +33,6 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     describe("1. TransferFrom Edge Cases", function() {
         beforeEach(async function() {
             await time.increase(TRADING_LOCK + 1);
-            await token.updateExemptSlot(6, addr1.address);
-            await time.increase(AFTER_ADMIN_LOCK);
             await token.transfer(addr1.address, ethers.parseEther("5000"));
             await token.updateExemptSlot(6, owner.address);
             await time.increase(AFTER_ADMIN_LOCK);
