@@ -1,4 +1,7 @@
 /**
+ * VERSION: 1.0056
+ */
+/**
  * ТАБЛИЦА 2: ADMIN COOLDOWN SCENARIOS (48h Admin Cooldown)
  * 
  * Покрива ВСИЧКИ admin cooldown случаи:

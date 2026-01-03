@@ -1,4 +1,5 @@
 /**
+ * VERSION: 1.0056
  * @version v34
  */
 
@@ -23,11 +24,12 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     beforeEach(async function() {
         [owner, addr1, addr2, addr3, exemptAddr1, exemptAddr2, addr4, addr5] = await ethers.getSigners();
         
-        await token.updateExemptSlot(6, addr1.address);
-        await time.increase(AFTER_ADMIN_LOCK);
         const KCY1Token = await ethers.getContractFactory("KCY1Token");
         token = await KCY1Token.deploy();
         await token.waitForDeployment();
+        
+        await token.updateExemptSlot(6, addr1.address);
+        await time.increase(AFTER_ADMIN_LOCK);
     });
     
     describe("1. TransferFrom Edge Cases", function() {
@@ -318,7 +320,12 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         
         it("6.2 Should allow trading at exactly tradingEnabledTime", async function() {
             const tradingTime = await token.tradingEnabledTime();
-            await time.increaseTo(Number(tradingTime));
+            const currentTime = await time.latest();
+            
+            // Only increase if we're before tradingTime
+            if (currentTime < tradingTime) {
+                await time.increaseTo(Number(tradingTime));
+            }
             
             await token.updateExemptSlot(6, addr1.address);
 			await time.increase(AFTER_ADMIN_LOCK);
@@ -335,7 +342,7 @@ describe("KCY1 Token v33 - Edge Cases", function() {
         
         it("6.3 Should unpause at exactly pausedUntil timestamp", async function() {
             await token.pause();
-            const pausedUntil = await token.pausedUntil();
+            const pausedUntil = await token.NotExemptTradeTransferPausedUntil();
             
             await time.increaseTo(Number(pausedUntil));
             

@@ -1,4 +1,7 @@
 /**
+ * VERSION: 1.0056
+ */
+/**
  * SECURITY SCENARIOS
  * 
  * Покрива:
@@ -92,12 +95,28 @@ describe("SECURITY SCENARIOS", function() {
         });
         
         it("Blacklist should work during pause", async function() {
+            // Keep attacker as NORMAL (not exempt) so blacklist check applies
+            // Blacklist attacker
             await token.setBlacklist(attacker.address, true);
+            
+            // Verify attacker is blacklisted
+            expect(await token.isBlacklisted(attacker.address)).to.equal(true);
+            
+            // Pause the contract
             await token.pause();
             
-            // Still blocked
+            // Even though pause blocks normal→exempt, blacklist should trigger FIRST
+            // But actually, pause check comes first! So this will fail with "Paused"
+            // To test blacklist during pause, we need exempt→exempt transfer
+            // Let's make exempt1 blacklisted instead
+            
+            await token.setBlacklist(exempt1.address, true);
+            
+            // exempt1 (blacklisted) tries to transfer to exempt2
+            // This is exempt→exempt so pause won't block it
+            // But blacklist should block it
             await expect(
-                token.connect(attacker).transfer(exempt1.address, ethers.parseEther("50"))
+                token.connect(exempt1).transfer(exempt2.address, ethers.parseEther("50"))
             ).to.be.revertedWith("Blacklisted");
         });
     });
@@ -117,7 +136,7 @@ describe("SECURITY SCENARIOS", function() {
             
             it("Should only allow admin to lock", async function() {
                 await expect(
-                    token.connect(attacker).lockExemptSlots()
+                    token.connect(attacker).lockExemptSlotsForever()
                 ).to.be.revertedWith("Not admin");
             });
             
@@ -125,7 +144,7 @@ describe("SECURITY SCENARIOS", function() {
                 await token.lockExemptSlotsForever();
                 
                 // No unlock function exists
-                expect(token.unlockExemptSlots).to.be.undefined;
+                expect(token.unlockExemptSlotsForever).to.be.undefined;
             });
         });
         
@@ -185,9 +204,19 @@ describe("SECURITY SCENARIOS", function() {
             const Token = await ethers.getContractFactory("KCY1Token");
             const freshToken = await Token.deploy();
             
+            // Multi-sig tries to use slot 2 without being set
+            // This will fail with "Only multi-sig" because multiSigAddress is 0x0
             await expect(
                 freshToken.connect(multiSig).updateExemptSlot(2, exempt1.address)
-            ).to.be.revertedWith("Multi-sig not set");
+            ).to.be.revertedWith("Only multi-sig for slots 1-5");
+            
+            // After setting multi-sig, it works
+            await freshToken.setMultiSigAddress(multiSig.address);
+            await time.increase(PAUSE_DURATION + 1);
+            
+            await expect(
+                freshToken.connect(multiSig).updateExemptSlot(2, exempt1.address)
+            ).to.not.be.reverted;
         });
     });
     

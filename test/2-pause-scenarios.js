@@ -1,4 +1,7 @@
 /**
+ * VERSION: 1.0056
+ */
+/**
  * ТАБЛИЦА 1: PAUSE SCENARIOS (Pause Behavior)
  * 
  * Покрива ВСИЧКИ pause случаи:

@@ -1,4 +1,7 @@
 /**
+ * VERSION: 1.0056
+ */
+/**
  * DISTRIBUTION SCENARIOS
  * 
  * Покрива:

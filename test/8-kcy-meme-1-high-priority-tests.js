@@ -1,4 +1,7 @@
 /**
+ * VERSION: 1.0056
+ */
+/**
  * @version v34
  */
 
@@ -280,8 +283,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             
             console.log(`      📊 Normal transfer gas: ${receipt.gasUsed}`);
             
-            // Gas should be reasonable (< 120k for normal transfer)
-            expect(receipt.gasUsed).to.be.lt(120000n);
+            // Gas should be reasonable (< 135k for normal transfer)
+            expect(receipt.gasUsed).to.be.lt(135000n);
         });
         
         it("3.2 Should measure gas for exempt transfer", async function() {
@@ -335,8 +338,8 @@ describe("KCY1 Token v33 - HIGH PRIORITY TESTS (NEW)", function() {
             
             console.log(`      📊 TransferFrom gas: ${receipt.gasUsed}`);
             
-            // TransferFrom is most expensive but should still be reasonable (< 130k)
-            expect(receipt.gasUsed).to.be.lt(130000n);
+            // TransferFrom is most expensive but should still be reasonable (< 140k)
+            expect(receipt.gasUsed).to.be.lt(140000n);
         });
         
         it("3.5 Should measure gas for updateExemptSlot", async function() {

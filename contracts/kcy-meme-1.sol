@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "./Addresses.sol";
 
 /**
- * @version v40 - FIXED RULES: onlyAdmin, 10 exemptSlots, updateExemptSlot(), proper pause logic
+ * @version 1.0056 - Router exception for Max 100 check (buyFromDEX compatibility)
  * @notice onlyAdmin = owner OR exempt slots (can call most functions)
  *         onlyMultiSig = ONLY multi-sig (unlock functions + removeFromBlacklist)
  *         First 5 exempt slots changeable ONLY by multi-sig

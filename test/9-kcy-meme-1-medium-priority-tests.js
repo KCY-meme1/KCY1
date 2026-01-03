@@ -1,4 +1,7 @@
 /**
+ * VERSION: 1.0056
+ */
+/**
  * @version v34
  */
 
@@ -82,11 +85,16 @@ describe("KCY1 Token v33 - MEDIUM PRIORITY TESTS (NEW)", function() {
                 
                 // Now do 100 transfers - owner will send to addresses that are NOT in exempt slots
                 // This means fees will apply!
-                // Owner (exempt slot) → addrs[0-7] (NOT exempt slots) = FEES
-                // Owner (exempt slot) → addrs[8-9] (exempt slots) = NO FEES
+                // Owner (exempt slot) → addrs[0-7] (NOT exempt slots) = FEES + 24h COOLDOWN
+                // Owner (exempt slot) → addrs[8-9] (exempt slots) = NO FEES, NO COOLDOWN
                 
                 for (let i = 0; i < 100; i++) {
                     await token.transfer(addrs[i % 10].address, ethers.parseEther("100"));
+                    
+                    // If transfer was exempt→normal (addrs 0-7), wait 24h cooldown
+                    if (i % 10 < 8) {
+                        await time.increase(24 * 3600 + 1);
+                    }
                 }
                 
                 const endTime = Date.now();

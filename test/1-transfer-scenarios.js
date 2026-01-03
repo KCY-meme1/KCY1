@@ -1,4 +1,5 @@
 /**
+ * VERSION: 1.0056
  * ТАБЛИЦА 3: TRANSFER SCENARIOS (Fees, Limits, Cooldowns)
  * 
  * Покрива ВСИЧКИ transfer случаи:
@@ -142,21 +143,25 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
     
     describe("CASE 3: Normal → Exempt", function() {
         it("Should enforce 2000 token MAX limit", async function() {
-            // Setup: normal1 buys from DEX (realistic!)
+            // Setup: Buy tokens in batches (respect 4000 wallet limit)
             await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal1, ethers.parseEther("2000")); // Total: ~3992 (after fees)
+            await buyFromDEX(normal1, ethers.parseEther("1900")); // Total: ~3896
             await time.increase(COOLDOWN_2H + 1);
             
-            // Below limit - OK
+            // Send 2000 to exempt (allowed)
             await expect(
                 token.connect(normal1).transfer(exempt1.address, ethers.parseEther("2000"))
-            ).to.not.be.reverted;
+            ).to.not.be.reverted; // normal1: ~1896 left
             
             await time.increase(COOLDOWN_2H + 1);
             
-            // Above limit - FAIL (normal1 has ~1992 left, try to send 2001)
+            // Buy more tokens
+            await buyFromDEX(normal1, ethers.parseEther("2000")); // normal1: ~3892
+            await time.increase(COOLDOWN_2H + 1);
+            
+            // Above limit - FAIL (try 2001)
             await expect(
                 token.connect(normal1).transfer(exempt1.address, ethers.parseEther("2001"))
             ).to.be.revertedWith("Max 2000");
@@ -214,11 +219,11 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
     
     describe("CASE 4: Normal → Normal", function() {
         it("Should enforce 2000 token MAX TX limit", async function() {
-            // Setup
+            // Setup - buy tokens respecting 4000 wallet limit
             await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal1, ethers.parseEther("2000")); // Total: ~3992
+            await buyFromDEX(normal1, ethers.parseEther("1900")); // normal1: ~3896
             await time.increase(COOLDOWN_2H + 1);
             
             await buyFromDEX(normal2, ethers.parseEther("1000"));
@@ -227,38 +232,42 @@ describe("ТАБЛИЦА 3: Transfer Scenarios (Fees, Limits, Cooldowns)", funct
             // Below limit - OK (send 2000)
             await expect(
                 token.connect(normal1).transfer(normal2.address, ethers.parseEther("2000"))
-            ).to.not.be.reverted; // normal2: ~2996, normal1: ~1992
+            ).to.not.be.reverted; // normal2: ~2996, normal1: ~1896
             
             await time.increase(COOLDOWN_2H + 1);
             
-            // Above limit - FAIL (try to send 2001, which also exceeds balance ~1992)
+            // Buy more for normal1
+            await buyFromDEX(normal1, ethers.parseEther("2000")); // normal1: ~3892
+            await time.increase(COOLDOWN_2H + 1);
+            
+            // Above limit - FAIL (try 2001)
             await expect(
                 token.connect(normal1).transfer(normal2.address, ethers.parseEther("2001"))
             ).to.be.revertedWith("Max 2000");
         });
         
         it("Should enforce 4000 token MAX WALLET limit", async function() {
-            // Setup: Get normal2 close to 4000 limit
+            // Setup: Get normal2 to exactly ~3999 tokens
             await buyFromDEX(normal1, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal1, ethers.parseEther("2000")); // normal1: ~3992
+            await buyFromDEX(normal1, ethers.parseEther("1900")); // normal1: ~3896
             await time.increase(COOLDOWN_2H + 1);
             
             await buyFromDEX(normal2, ethers.parseEther("2000"));
             await time.increase(COOLDOWN_2H + 1);
             
-            await buyFromDEX(normal2, ethers.parseEther("2000")); // normal2: ~3992
+            await buyFromDEX(normal2, ethers.parseEther("1900")); // normal2: ~3896
             await time.increase(COOLDOWN_2H + 1);
             
-            // Transfer small amount → normal2 will be at/near 4000 limit
+            // Transfer to bring normal2 to ~3999 (just under 4000)
             await expect(
-                token.connect(normal1).transfer(normal2.address, ethers.parseEther("8"))
-            ).to.not.be.reverted; // normal2: ~4000
+                token.connect(normal1).transfer(normal2.address, ethers.parseEther("103"))
+            ).to.not.be.reverted; // normal2: ~3999
             
             await time.increase(COOLDOWN_2H + 1);
             
-            // Try to send more → exceeds 4000 wallet limit
+            // Try to send 1 more → exceeds 4000 wallet limit
             await expect(
                 token.connect(normal1).transfer(normal2.address, ethers.parseEther("1"))
             ).to.be.revertedWith("Max wallet 4k");

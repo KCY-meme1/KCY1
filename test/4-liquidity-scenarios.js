@@ -1,4 +1,7 @@
 /**
+ * VERSION: 1.0056
+ */
+/**
  * ТАБЛИЦА 4: LIQUIDITY SCENARIOS (DEX Operations)
  * 
  * Покрива ВСИЧКИ liquidity случаи:
