@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KCY1 Token - KCY-meme-1 | Official Documentation v1.0056</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 60px 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .version {
+            font-size: 1.2em;
+            color: #ffd700;
+            margin-bottom: 20px;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            opacity: 0.9;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            margin-bottom: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        h2 {
+            font-size: 2em;
+            margin-bottom: 20px;
+            color: #ffd700;
+            border-bottom: 2px solid #ffd700;
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            font-size: 1.5em;
+            margin: 25px 0 15px 0;
+            color: #ffeb3b;
+        }
+
+        .info-box {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #ffd700;
+        }
+
+        .critical-box {
+            background: rgba(255, 0, 0, 0.2);
+            border-left-color: #ff4444;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        th {
+            background: rgba(255, 215, 0, 0.3);
+            font-weight: bold;
+        }
+
+        .checkmark {
+            color: #4caf50;
+            font-weight: bold;
+        }
+
+        .xmark {
+            color: #f44336;
+            font-weight: bold;
+        }
+
+        code {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .highlight {
+            color: #ffd700;
+            font-weight: bold;
+        }
+
+        ul {
+            margin-left: 20px;
+            margin-top: 10px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            margin-top: 40px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔷 KCY1 TOKEN 🔷</h1>
+            <div class="version">Version 1.0056</div>
+            <div class="subtitle">KCY-meme-1 | Decentralized Multi-Sig Controlled Token</div>
+            <div style="margin-top: 20px;">
+                <strong>Symbol:</strong> KCY1 | 
+                <strong>Total Supply:</strong> 100,000,000 | 
+                <strong>Decimals:</strong> 18
+            </div>
+        </header>
+
+        <!-- CRITICAL RULES -->
+        <div class="section">
+            <h2>⚠️ CRITICAL RULES</h2>
+            <div class="info-box critical-box">
+                <ol>
+                    <li><strong>Owner = Exempt Slot!</strong> Owner is part of exempt slots, NOT a separate category!</li>
+                    <li><strong>Multi-sig CANNOT transfer!</strong> Only unlock functions and removeFromBlacklist!</li>
+                    <li><strong>On PAUSE: IF THERE'S NORMAL → BLOCKED!</strong></li>
+                    <li><strong>Multi-sig bypasses ALL cooldowns and locks!</strong></li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- TOKEN INFO -->
+        <div class="section">
+            <h2>📊 Token Information</h2>
+            <table>
+                <tr>
+                    <th>Property</th>
+                    <th>Value</th>
+                </tr>
+                <tr>
+                    <td>Contract Name</td>
+                    <td>KCY1Token</td>
+                </tr>
+                <tr>
+                    <td>Token Name</td>
+                    <td>KCY-meme-1</td>
+                </tr>
+                <tr>
+                    <td>Symbol</td>
+                    <td>KCY1</td>
+                </tr>
+                <tr>
+                    <td>Total Supply</td>
+                    <td>100,000,000 tokens</td>
+                </tr>
+                <tr>
+                    <td>Decimals</td>
+                    <td>18</td>
+                </tr>
+                <tr>
+                    <td>Trading Lock</td>
+                    <td>48 hours after deployment</td>
+                </tr>
+            </table>
+        </div>
+
+        <!-- PAUSE RULES -->
+        <div class="section">
+            <h2>⏸️ PAUSE Rules</h2>
+            <p><strong>Logic:</strong> <code>bool isNormalTransaction = !fromExempt || !toExempt;</code></p>
+            <p><strong>Rule:</strong> IF THERE'S NORMAL IN TRANSACTION → BLOCKED ON PAUSE!</p>
+            
+            <h3>Transfer Types During Pause</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transfer Type</th>
+                        <th>During PAUSE (48h)</th>
+                        <th>Normal Operation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Exempt → Exempt</td>
+                        <td class="checkmark">✅ ALLOWED</td>
+                        <td class="checkmark">✅ ALLOWED</td>
+                    </tr>
+                    <tr>
+                        <td>Exempt → Normal</td>
+                        <td class="xmark">❌ BLOCKED</td>
+                        <td class="checkmark">✅ ALLOWED</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Exempt</td>
+                        <td class="xmark">❌ BLOCKED</td>
+                        <td class="checkmark">✅ ALLOWED</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Normal</td>
+                        <td class="xmark">❌ BLOCKED</td>
+                        <td class="checkmark">✅ ALLOWED</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- COOLDOWNS -->
+        <div class="section">
+            <h2>⏱️ COOLDOWN Rules</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transfer Type</th>
+                        <th>Sender Cooldown</th>
+                        <th>Receiver Cooldown</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Exempt → Exempt</td>
+                        <td class="xmark">❌ NONE</td>
+                        <td class="xmark">❌ NONE</td>
+                    </tr>
+                    <tr>
+                        <td>Exempt → Normal</td>
+                        <td>⏰ 24h</td>
+                        <td class="xmark">❌ NONE</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Exempt</td>
+                        <td>⏰ 2h</td>
+                        <td class="xmark">❌ NONE</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Normal</td>
+                        <td>⏰ 2h</td>
+                        <td class="xmark">❌ NONE</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="info-box">
+                <strong>Constants:</strong><br>
+                • COOLDOWN = 2 hours (7200 seconds)<br>
+                • EXEMPT_TO_NORMAL_COOLDOWN = 24 hours (86400 seconds)
+            </div>
+        </div>
+
+        <!-- LIMITS -->
+        <div class="section">
+            <h2>📏 LIMITS</h2>
+            
+            <h3>Trading Limits</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Trade Type</th>
+                        <th>Max Transaction</th>
+                        <th>Max Wallet (Receiver)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Router → Exempt</td>
+                        <td>∞ NO LIMIT</td>
+                        <td>∞ NO LIMIT</td>
+                    </tr>
+                    <tr>
+                        <td>Router → Normal</td>
+                        <td>2000 tokens</td>
+                        <td>4000 tokens</td>
+                    </tr>
+                    <tr>
+                        <td>Exempt → Router</td>
+                        <td>∞ NO LIMIT</td>
+                        <td>∞ NO LIMIT</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Router</td>
+                        <td>2000 tokens</td>
+                        <td>∞ NO LIMIT</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Transfer Limits</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transfer Type</th>
+                        <th>Max Transaction</th>
+                        <th>Max Wallet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Exempt → Exempt</td>
+                        <td>∞ NO LIMIT</td>
+                        <td>∞ NO LIMIT</td>
+                    </tr>
+                    <tr>
+                        <td>Exempt → Normal</td>
+                        <td class="highlight">100 tokens</td>
+                        <td>4000 tokens</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Exempt</td>
+                        <td>2000 tokens</td>
+                        <td>∞ NO LIMIT</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Normal</td>
+                        <td>2000 tokens</td>
+                        <td>4000 tokens</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="info-box">
+                <strong>⚠️ IMPORTANT:</strong> Router bypass for Max 100 check!<br>
+                When <code>msg.sender == pncswpRouter</code>, the 100 token limit does NOT apply!
+            </div>
+        </div>
+
+        <!-- FEES -->
+        <div class="section">
+            <h2>💰 FEES</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Transfer Type</th>
+                        <th>Fee (Burn + Owner)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Exempt → Exempt</td>
+                        <td>0% (NO FEE)</td>
+                    </tr>
+                    <tr>
+                        <td>Exempt → Normal</td>
+                        <td>0.08% (0.03% + 0.05%)</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Exempt</td>
+                        <td>0.08% (0.03% + 0.05%)</td>
+                    </tr>
+                    <tr>
+                        <td>Normal → Normal</td>
+                        <td>0.08% (0.03% + 0.05%)</td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="info-box">
+                <strong>Constants:</strong><br>
+                • BURN_FEE = 30 (0.03%)<br>
+                • OWNER_FEE = 50 (0.05%)<br>
+                • FEE_DENOMINATOR = 100,000<br>
+                • <strong>Total Fee = 80 / 100,000 = 0.08%</strong>
+            </div>
+        </div>
+
+        <!-- MULTI-SIG -->
+        <div class="section">
+            <h2>🔐 MULTI-SIG Control</h2>
+            <div class="info-box critical-box">
+                <h3>Multi-Sig Works ALWAYS - Bypasses ALL Pauses & Cooldowns!</h3>
+                <p>Multi-sig can call these functions even during:</p>
+                <ul>
+                    <li>PAUSE period</li>
+                    <li>Admin cooldown (48h)</li>
+                    <li>Lock states</li>
+                </ul>
+            </div>
+
+            <h3>Functions Multi-Sig Can Execute</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Function</th>
+                        <th>Multi-Sig Can Call</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>pause()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>updateExemptSlot()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>updateDEXAddresses()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>setLiquidityPair()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>setBlacklist()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>removeFromBlacklist()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>removeMULTIFromBlacklist()</td>
+                        <td class="checkmark">✅ YES (NEW!)</td>
+                    </tr>
+                    <tr>
+                        <td>unlockExemptSlots()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>unlockDEXAddresses()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                    <tr>
+                        <td>unlockLiquidityPairs()</td>
+                        <td class="checkmark">✅ YES</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- DISTRIBUTION -->
+        <div class="section">
+            <h2>💎 Distribution</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Recipient</th>
+                        <th>Amount</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>DEV Wallet</td>
+                        <td>96,000,000</td>
+                        <td>96%</td>
+                    </tr>
+                    <tr>
+                        <td>Marketing</td>
+                        <td>1,500,000</td>
+                        <td>1.5%</td>
+                    </tr>
+                    <tr>
+                        <td>Team</td>
+                        <td>1,000,000</td>
+                        <td>1.0%</td>
+                    </tr>
+                    <tr>
+                        <td>Advisor</td>
+                        <td>1,500,000</td>
+                        <td>1.5%</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- SECURITY -->
+        <div class="section">
+            <h2>🛡️ Security Features</h2>
+            <ul>
+                <li><strong>3-of-5 Multi-Sig:</strong> Critical functions require 3 signatures out of 5 owners</li>
+                <li><strong>Permanent Locks:</strong> Exempt slots, DEX addresses, and liquidity pairs can be locked forever</li>
+                <li><strong>Admin Cooldown:</strong> 48-hour cooldown after admin address changes</li>
+                <li><strong>Trading Lock:</strong> 48-hour lock after deployment</li>
+                <li><strong>Blacklist System:</strong> Admin can blacklist addresses, only Multi-Sig can remove</li>
+                <li><strong>ReentrancyGuard:</strong> Protection against reentrancy attacks</li>
+            </ul>
+        </div>
+
+        <!-- NEW IN 1.0056 -->
+        <div class="section">
+            <h2>🆕 New in Version 1.0056</h2>
+            <ul>
+                <li><strong>removeMULTIFromBlacklist():</strong> Multi-sig can now remove multiple addresses from blacklist in one transaction</li>
+                <li><strong>Multi-Sig Bypass:</strong> Multi-sig now bypasses ALL cooldowns and locks</li>
+                <li><strong>Router Exception:</strong> Router bypasses Max 100 token limit for DEX purchases</li>
+                <li><strong>Website Constant:</strong> Added public constant <code>website = "https://kcy1.io"</code></li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p>KCY1 Token (KCY-meme-1) | Version 1.0056</p>
+            <p>Smart Contract Address: [To be announced after deployment]</p>
+            <p>© 2025 KCY1 Token | All Rights Reserved</p>
+        </div>
+    </div>
+</body>
+</html>

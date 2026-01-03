@@ -296,28 +296,24 @@ describe("KCY1 Token v33 - Edge Cases", function() {
     
     describe("6. Time-based Edge Cases", function() {
         it("6.1 Should prevent trading at exactly tradingEnabledTime - 1 second", async function() {
-            // Get current time and trading time
-            const currentTime = await time.latest();
-            const tradingTime = await token.tradingEnabledTime();
+            // Deploy fresh token (tradingEnabledTime = now + 48h)
+            const Token = await ethers.getContractFactory("KCY1Token");
+            const freshToken = await Token.deploy();
+            await freshToken.waitForDeployment();
             
-            // If we're already past trading time (from beforeEach), skip this test
-            if (currentTime >= tradingTime) {
-                this.skip();
-                return;
-            }
+            const tradingTime = await freshToken.tradingEnabledTime();
             
-            // Don't increase time, we're already before tradingEnabledTime from deployment
-            await token.updateExemptSlot(6, addr1.address);
-			await time.increase(AFTER_ADMIN_LOCK);
-            await token.transfer(addr1.address, ethers.parseEther("1000"));
-            await token.updateExemptSlot(6, owner.address);
-			await time.increase(AFTER_ADMIN_LOCK);
+            // Give addr1 tokens DIRECTLY from owner (both exempt by default in fresh token)
+            await freshToken.transfer(addr1.address, ethers.parseEther("100"));
             
+            // Wait ALMOST to tradingEnabledTime (48h - 10 seconds)
+            await time.increaseTo(tradingTime - 10n);
+            
+            // addr1 (normal user) tries to transfer BEFORE tradingEnabledTime
             await expect(
-                token.connect(addr1).transfer(addr2.address, ethers.parseEther("100"))
+                freshToken.connect(addr1).transfer(addr2.address, ethers.parseEther("50"))
             ).to.be.revertedWith("Locked 48h");
         });
-        
         it("6.2 Should allow trading at exactly tradingEnabledTime", async function() {
             const tradingTime = await token.tradingEnabledTime();
             const currentTime = await time.latest();

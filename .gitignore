@@ -1,7 +1,46 @@
-artifacts/
-cache/
-fromAI/
+# Node modules
 node_modules/
+npm-debug.log*
+
+# Hardhat
+cache/
+artifacts/
+coverage/
+typechain/
+typechain-types/
+
+# Environment
 .env
-package-lock.json
-addrs.txt
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test backups and debug files
+test/*backup*
+test/DEBUG*
+test/*.bak
+test/*-backup.js
+
+# Build files
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Deployment keys (NEVER COMMIT!)
+*.key
+*.pem
+mnemonic.txt
+private-keys.txt

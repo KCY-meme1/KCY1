@@ -4,12 +4,12 @@ pragma solidity ^0.8.20;
 import "./Addresses.sol";
 
 /**
- * @version 1.0056 - Router exception for Max 100 check (buyFromDEX compatibility)
- * @notice onlyAdmin = owner OR exempt slots (can call most functions)
- *         onlyMultiSig = ONLY multi-sig (unlock functions + removeFromBlacklist)
- *         First 5 exempt slots changeable ONLY by multi-sig
- *         Admin cooldown blocks ALL transfers (even Exempt → Exempt)
- *         Pause blocks ALL transfers with Normal users (including Exempt → Normal)
+ * @notice v1.0056 - Router exception for Max 100 check (buyFromDEX compatibility)
+ * @dev onlyAdmin = owner OR exempt slots (can call most functions)
+ *      onlyMultiSig = ONLY multi-sig (unlock functions + removeFromBlacklist)
+ *      First 5 exempt slots changeable ONLY by multi-sig
+ *      Admin cooldown blocks ALL transfers (even Exempt → Exempt)
+ *      Pause blocks ALL transfers with Normal users (including Exempt → Normal)
  */
 // KCY1 Token (KCY-meme-1)
 /**
@@ -132,6 +132,7 @@ abstract contract ReentrancyGuard {
 contract KCY1Token is IERC20, ReentrancyGuard {
     string public constant name = "KCY-meme-1";
     string public constant symbol = "KCY1";
+    string public constant website = "https://kcy1.io";
     uint8 public constant decimals = 18;
     uint256 public override totalSupply;
     
@@ -257,7 +258,8 @@ contract KCY1Token is IERC20, ReentrancyGuard {
             msg.sender == eAddr7 ||
             msg.sender == eAddr8 ||
             msg.sender == eAddr9 ||
-            msg.sender == eAddr10,
+            msg.sender == eAddr10 ||
+            msg.sender == multiSigAddress,
             "Not admin"
         );
         _;
@@ -276,22 +278,34 @@ contract KCY1Token is IERC20, ReentrancyGuard {
     }
     
     modifier whenSlotsNotLocked() {
-        require(!exemptSlotsLocked, "Slots locked");
+        // Multi-sig bypasses lock
+        if (msg.sender != multiSigAddress) {
+            require(!exemptSlotsLocked, "Slots locked");
+        }
         _;
     }
     
     modifier whenNotInMainAddressChangersCooldown() {
-        require(block.timestamp >= mainAddressChangersCooldown, "Address changers cooldown");
+        // Multi-sig bypasses cooldown
+        if (msg.sender != multiSigAddress) {
+            require(block.timestamp >= mainAddressChangersCooldown, "Address changers cooldown");
+        }
         _;
     }
     
     modifier whenPairsNotLocked() {
-        require(!liquidityPairsLocked, "Pairs locked");
+        // Multi-sig bypasses lock
+        if (msg.sender != multiSigAddress) {
+            require(!liquidityPairsLocked, "Pairs locked");
+        }
         _;
     }
     
     modifier whenDEXNotLocked() {
-        require(!dexAddressesLocked, "DEX locked");
+        // Multi-sig bypasses lock
+        if (msg.sender != multiSigAddress) {
+            require(!dexAddressesLocked, "DEX locked");
+        }
         _;
     }
     
@@ -611,6 +625,19 @@ contract KCY1Token is IERC20, ReentrancyGuard {
         require(isBlacklisted[account], "Not blacklisted");
         isBlacklisted[account] = false;
         emit Blacklisted(account, false);
+    }
+    
+    /**
+     * @notice Remove MULTIPLE addresses from blacklist (requires multi-sig)
+     * @dev ONLY callable via multi-sig contract for security
+     */
+    function removeMULTIFromBlacklist(address[] calldata accounts) external onlyMultiSig {
+        for (uint256 i = 0; i < accounts.length; i++) {
+            if (isBlacklisted[accounts[i]]) {
+                isBlacklisted[accounts[i]] = false;
+                emit Blacklisted(accounts[i], false);
+            }
+        }
     }
     
     function transfer(address to, uint256 amount) public override returns (bool) {
